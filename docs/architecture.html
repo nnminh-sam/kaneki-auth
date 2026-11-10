@@ -1,0 +1,1553 @@
+<!doctype html>
+<html lang="en" data-haise="doc" data-haise-version="3.1.0">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaneki Auth architecture</title>
+<script>
+/* haise: apply the saved theme before first paint (no flash) */
+(function(){try{var t=localStorage.getItem('haise.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+<style id="haise-shell-css">
+/* ===== haise-doc shell v3.1.0 — do not edit per document ===== */
+:root{
+  --bg:#f7f7f5; --panel:#ffffff; --panel-2:#f0efeb; --ink:#1d1d1b; --muted:#6b6a66; --line:#e2e0da;
+  --accent:#3b5bdb; --accent-soft:#e9edff; --ok:#2b8a3e; --ok-soft:#e7f5ea;
+  --bad:#c92a2a; --bad-soft:#ffebeb; --warn:#d9480f; --warn-soft:#fff0e6;
+  --info:#7048e8; --info-soft:#f0ebff;
+  --code:#f3f2ee; --hit:#ffe58a; --hit-cur:#ffb84d;
+  --c1:#3b5bdb; --c2:#d9480f; --c3:#2b8a3e; --c4:#7048e8; --c5:#0c8599;
+  --p1:#3b5bdb; --p1-soft:#e9edff; --p2:#0c8599; --p2-soft:#e3f6f8; --p3:#7048e8; --p3-soft:#f0ebff;
+  --p4:#d9480f; --p4-soft:#fff0e6; --p5:#2b8a3e; --p5-soft:#e7f5ea; --p6:#c2255c; --p6-soft:#fdebf1;
+  --sans:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans JP",Roboto,"Noto Sans",sans-serif;
+  --mono:ui-monospace,"Cascadia Code","JetBrains Mono",Consolas,Menlo,monospace;
+  --radius:10px; --topbar-h:52px; --nav-w:280px;
+  --fig-label:"Figure"; --tbl-label:"Table";
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141413; --panel:#1d1d1b; --panel-2:#262624; --ink:#ecebe6; --muted:#a3a29c; --line:#34342f;
+    --accent:#91a7ff; --accent-soft:#1f2547; --ok:#69db7c; --ok-soft:#1b2e20;
+    --bad:#ff8787; --bad-soft:#3a1c1c; --warn:#ffa94d; --warn-soft:#3a2412;
+    --info:#b197fc; --info-soft:#271f45;
+    --code:#232321; --hit:#6b5a12; --hit-cur:#a8671a;
+    --c1:#91a7ff; --c2:#ffa94d; --c3:#69db7c; --c4:#b197fc; --c5:#66d9e8;
+    --p1:#91a7ff; --p1-soft:#1f2547; --p2:#66d9e8; --p2-soft:#10303a; --p3:#b197fc; --p3-soft:#271f45;
+    --p4:#ffa94d; --p4-soft:#3a2412; --p5:#69db7c; --p5-soft:#1b2e20; --p6:#f783ac; --p6-soft:#3a1825;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141413; --panel:#1d1d1b; --panel-2:#262624; --ink:#ecebe6; --muted:#a3a29c; --line:#34342f;
+  --accent:#91a7ff; --accent-soft:#1f2547; --ok:#69db7c; --ok-soft:#1b2e20;
+  --bad:#ff8787; --bad-soft:#3a1c1c; --warn:#ffa94d; --warn-soft:#3a2412;
+  --info:#b197fc; --info-soft:#271f45;
+  --code:#232321; --hit:#6b5a12; --hit-cur:#a8671a;
+  --c1:#91a7ff; --c2:#ffa94d; --c3:#69db7c; --c4:#b197fc; --c5:#66d9e8;
+  --p1:#91a7ff; --p1-soft:#1f2547; --p2:#66d9e8; --p2-soft:#10303a; --p3:#b197fc; --p3-soft:#271f45;
+  --p4:#ffa94d; --p4-soft:#3a2412; --p5:#69db7c; --p5-soft:#1b2e20; --p6:#f783ac; --p6-soft:#3a1825;
+}
+:root:lang(vi){ --fig-label:"Hình"; --tbl-label:"Bảng"; }
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 var(--sans)}
+a{color:var(--accent)}
+[id]{scroll-margin-top:calc(var(--topbar-h) + 14px)}
+/* phase / series colour sets: add .p1 … .p6 to a step, chip, card or callout */
+.p1{--pc:var(--p1);--ps:var(--p1-soft)} .p2{--pc:var(--p2);--ps:var(--p2-soft)} .p3{--pc:var(--p3);--ps:var(--p3-soft)}
+.p4{--pc:var(--p4);--ps:var(--p4-soft)} .p5{--pc:var(--p5);--ps:var(--p5-soft)} .p6{--pc:var(--p6);--ps:var(--p6-soft)}
+
+/* --- progress + top bar --- */
+.progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--accent);z-index:60}
+.topbar{position:sticky;top:0;z-index:50;height:var(--topbar-h);display:flex;align-items:center;gap:8px;
+  padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar .doc-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto}
+.iconbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;
+  border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;font-size:15px;line-height:1}
+.iconbtn:hover{border-color:var(--muted)}
+.iconbtn svg{width:17px;height:17px;margin:0}
+.search{flex:0 1 400px;display:flex;align-items:center;gap:6px;min-width:0}
+.search .box{position:relative;flex:1;min-width:0}
+.search input{width:100%;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  padding:0 10px 0 32px;font:inherit;font-size:.88rem}
+.search input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.search .box svg{position:absolute;left:9px;top:9px;width:16px;height:16px;margin:0;color:var(--muted)}
+.search .count{font-size:.78rem;color:var(--muted);min-width:60px;text-align:center;white-space:nowrap}
+.search .iconbtn{width:28px;height:28px;font-size:12px}
+
+/* --- sidebar (table of contents) --- */
+.sidebar{position:fixed;top:var(--topbar-h);bottom:0;left:0;width:var(--nav-w);overflow-y:auto;z-index:40;
+  background:var(--bg);border-right:1px solid var(--line);padding:22px 12px 48px;transition:transform .2s ease}
+.sidebar h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 8px 10px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc ol ol{padding-left:10px;margin:2px 0 8px 14px;border-left:1px solid var(--line)}
+.toc a{display:flex;gap:6px;align-items:baseline;padding:4px 8px;border-radius:6px;color:var(--muted);
+  text-decoration:none;font-size:.87rem;line-height:1.45}
+.toc > ol > li > a{font-weight:500}
+.toc ol ol a{font-size:.82rem}
+.toc a:hover{background:var(--panel-2);color:var(--ink)}
+.toc a.active{background:var(--panel-2);color:var(--ink);font-weight:600}
+.toc .num{opacity:.75;font-variant-numeric:tabular-nums;flex:none}
+.toc .badge{margin-left:auto;flex:none;font-size:.7rem;font-weight:700;padding:0 6px;border-radius:999px;
+  background:var(--hit);color:var(--ink)}
+.toc .badge:empty{display:none}
+.backdrop{display:none}
+.page{margin-left:var(--nav-w);transition:margin .2s ease}
+body.nav-collapsed .sidebar{transform:translateX(-100%)}
+body.nav-collapsed .page{margin-left:0}
+@media (max-width:960px){
+  .page{margin-left:0}
+  .sidebar{transform:translateX(-100%);background:var(--panel);box-shadow:4px 0 24px rgba(0,0,0,.18)}
+  body.nav-open .sidebar{transform:none}
+  body.nav-open .backdrop{display:block;position:fixed;inset:var(--topbar-h) 0 0 0;background:rgba(0,0,0,.35);z-index:35}
+  .topbar .doc-title{display:none}
+  .search{flex:1 1 auto}
+}
+
+/* --- document body --- */
+.wrap{max-width:860px;margin:0 auto;padding:32px 24px 96px}
+.doc-head{margin:0 0 8px}
+.doc-head .eyebrow{margin:0 0 6px;font-size:.76rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.doc-head h1{font-size:1.9rem;line-height:1.25;margin:0 0 6px}
+.doc-head .sub{color:var(--muted);margin:0 0 14px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.meta li{background:var(--panel-2);border-radius:999px;padding:2px 11px;font-size:.8rem;color:var(--ink);min-width:0}
+.meta li b{color:var(--muted);font-weight:600;margin-right:5px}
+section{margin:40px 0 0}
+section > h2{font-size:1.4rem;line-height:1.3;margin:0 0 14px;padding-top:20px;border-top:1px solid var(--line)}
+h3{font-size:1.15rem;line-height:1.35;margin:32px 0 8px}
+h4{font-size:1rem;margin:20px 0 6px}
+h2 .num,h3 .num{color:var(--muted);font-weight:600;margin-right:.45em;font-variant-numeric:tabular-nums}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:24px}
+li{margin:4px 0}
+li > ul,li > ol{margin-bottom:4px}
+code,.mono{font-family:var(--mono);font-size:.86em;background:var(--code);padding:1px 5px;border-radius:5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;overflow-x:auto;
+  font-size:.84rem;line-height:1.5;margin:0 0 14px}
+pre code{background:none;padding:0;font-size:inherit}
+p code,li code,td code,.card code{overflow-wrap:anywhere}
+blockquote{margin:0 0 16px;padding:2px 16px;border-left:3px solid var(--line);color:var(--muted)}
+.tbl{overflow-x:auto;margin:0 0 18px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:.92rem;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius)}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+tr:last-child > td,tr:last-child > th{border-bottom:0}
+th{background:var(--panel-2);font-weight:600}
+tr:first-child > :first-child{border-top-left-radius:calc(var(--radius) - 1px)}
+tr:first-child > :last-child{border-top-right-radius:calc(var(--radius) - 1px)}
+tr:last-child > :first-child{border-bottom-left-radius:calc(var(--radius) - 1px)}
+tr:last-child > :last-child{border-bottom-right-radius:calc(var(--radius) - 1px)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.hl td{background:var(--warn-soft)}
+.small{font-size:.86rem;color:var(--muted)}
+.good{color:var(--ok);font-weight:600} .badv{color:var(--bad);font-weight:600}
+hr{border:none;border-top:1px solid var(--line);margin:28px 0}
+
+/* translated keyword + original */
+strong.kw{font-weight:700}
+.orig{color:var(--muted);font-size:.94em;white-space:nowrap}
+
+/* lead answer / callouts / tags / chips */
+.verdict{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin:0 0 18px;
+  box-shadow:0 1px 2px rgb(0 0 0 / .04)}
+.verdict .label{display:block;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.verdict p{margin:0 0 8px;font-size:1.05rem} .verdict > :last-child{margin-bottom:0}
+.callout{--cc:var(--pc,var(--accent));margin:0 0 18px;padding:12px 16px;border-radius:var(--radius);background:var(--panel);
+  border:1px solid var(--line);border-left:4px solid var(--cc)}
+.callout.ok,.callout.tip{--cc:var(--ok)} .callout.bad,.callout.myth{--cc:var(--bad)} .callout.warn{--cc:var(--warn)}
+.callout.info,.callout.interview{--cc:var(--info)} .callout.example{--cc:var(--p2)} .callout.tldr{--cc:var(--muted)}
+.callout > :first-child{margin-top:0} .callout > :last-child{margin-bottom:0}
+.kind{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--cc,var(--pc,var(--accent)));margin-right:6px}
+.callout .ct{font-weight:600;margin:0 0 6px}
+.tag{display:inline-block;font-size:.7rem;font-weight:700;padding:0 7px;border-radius:999px;border:1px solid currentColor;
+  margin-left:4px;vertical-align:1px;white-space:nowrap;line-height:1.6}
+.tag.sure{color:var(--ok)} .tag.infer{color:var(--warn)} .tag.open{color:var(--bad)}
+.sev{display:inline-block;font-size:.72rem;font-weight:700;padding:0 7px;border-radius:4px;white-space:nowrap}
+.sev.high{background:var(--bad-soft);color:var(--bad)} .sev.med{background:var(--warn-soft);color:var(--warn)} .sev.low{background:var(--panel-2);color:var(--muted)}
+.chip{display:inline-block;font-size:.75rem;font-weight:600;line-height:1.5;padding:1px 9px;border-radius:999px;margin-left:6px;
+  vertical-align:1px;white-space:nowrap;background:var(--ps,var(--panel-2));color:var(--pc,var(--muted))}
+.ex{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:6px 0 8px;font-size:.88rem}
+.ex > .k{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.ex code{white-space:pre-wrap;word-break:break-word}
+
+/* findings list */
+ol.findings{counter-reset:f;list-style:none;padding:0;margin:0 0 18px}
+ol.findings > li{counter-increment:f;position:relative;padding:10px 4px 10px 48px;margin:0;border-bottom:1px solid var(--line)}
+ol.findings > li:last-child{border-bottom:none}
+ol.findings > li::before{content:counter(f);position:absolute;left:4px;top:9px;width:30px;height:30px;border-radius:50%;
+  background:var(--accent-soft);color:var(--accent);border:2px solid var(--accent);font-weight:700;font-size:.85rem;
+  display:flex;align-items:center;justify-content:center}
+
+/* cards, grids, stat tiles, step cards */
+.grid2,.grid3{display:grid;gap:14px;margin:0 0 18px}
+.grid2{grid-template-columns:1fr 1fr} .grid3{grid-template-columns:repeat(3,1fr)}
+.grid2>*,.grid3>*{min-width:0}
+.card{border:1px solid var(--line);border-top:3px solid var(--pc,var(--line));border-radius:var(--radius);padding:12px 14px;background:var(--panel)}
+.card h4{margin:0 0 6px}
+.card > :last-child{margin-bottom:0}
+.card.ok{--pc:var(--ok)} .card.bad{--pc:var(--bad)} .card.warn{--pc:var(--warn)} .card.info{--pc:var(--info)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:0 0 18px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.stat .v{display:block;font-size:1.6rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.stat .k{display:block;font-size:.82rem;color:var(--muted)}
+.stat.ok .v{color:var(--ok)} .stat.bad .v{color:var(--bad)} .stat.warn .v{color:var(--warn)}
+ol.steps{list-style:none;padding:0;margin:0 0 18px;counter-reset:s;position:relative}
+ol.steps::before{content:"";position:absolute;left:17px;top:10px;bottom:10px;width:2px;background:var(--line)}
+ol.steps > li{counter-increment:s;position:relative;margin:0 0 12px 52px;padding:10px 14px;background:var(--panel);
+  border:1px solid var(--line);border-top:3px solid var(--pc,var(--accent));border-radius:var(--radius);font-size:.96rem}
+ol.steps > li::before{content:counter(s);position:absolute;left:-52px;top:-3px;width:36px;height:36px;border-radius:50%;
+  background:var(--ps,var(--accent-soft));color:var(--pc,var(--accent));border:2px solid var(--pc,var(--accent));
+  font-weight:700;font-size:.92rem;display:flex;align-items:center;justify-content:center;z-index:1}
+ol.steps > li.ok{--pc:var(--ok);--ps:var(--ok-soft)} ol.steps > li.bad{--pc:var(--bad);--ps:var(--bad-soft)}
+ol.steps > li.warn{--pc:var(--warn);--ps:var(--warn-soft)}
+ol.steps > li > :last-child{margin-bottom:0}
+
+/* phase focus: hover (or tap to pin) anything with data-phase="…" to light up that phase in every step card and diagram */
+[data-phase]{transition:opacity .15s,box-shadow .15s}
+body.focus-on main [data-phase]:not(.on){opacity:.22}
+main :not(svg *)[data-phase]{cursor:pointer}
+ol.steps > li.on,.card.on{box-shadow:0 0 0 2px var(--pc,var(--accent))}
+.phase-key{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 16px;font-size:.82rem;color:var(--muted)}
+.phase-key .chip{margin-left:0}
+
+/* collapsible deep dives */
+details.more{border:1px solid var(--line);border-radius:var(--radius);margin:0 0 18px;background:var(--panel)}
+details.more > summary{cursor:pointer;padding:10px 14px;font-weight:600;list-style:none}
+details.more > summary::-webkit-details-marker{display:none}
+details.more > summary::before{content:"▸";display:inline-block;width:1.1em;color:var(--muted);transition:transform .15s}
+details.more[open] > summary::before{transform:rotate(90deg)}
+details.more > .body{padding:2px 16px 14px}
+details.more > .body > :last-child{margin-bottom:0}
+
+/* figures (diagrams, charts) */
+figure.fig{margin:4px 0 24px;padding:14px 14px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+figure.fig svg{max-width:100%;height:auto;display:block;margin:4px auto}
+figure.fig svg text{font-family:var(--sans)}
+figure.fig .grid2,figure.fig .grid3{margin-bottom:8px}
+main{counter-reset:fig tbl}
+figure.fig > figcaption{font-size:.86rem;color:var(--muted);margin-top:8px}
+figure.fig > figcaption::before{counter-increment:fig;content:var(--fig-label) " " counter(fig) " — ";font-weight:700;color:var(--ink)}
+.tbl > .cap{font-size:.86rem;color:var(--muted);margin:0 0 6px}
+.tbl > .cap::before{counter-increment:tbl;content:var(--tbl-label) " " counter(tbl) " — ";font-weight:700;color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.82rem;color:var(--muted);margin:4px 0 0}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+figure.fig img{max-width:100%;height:auto;display:block}
+
+/* zoom viewer: click a figure image or diagram to open it full screen */
+.zoomable{cursor:zoom-in;transition:outline-color .15s}
+.zoomable:hover,.zoomable:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.zoom-ov{position:fixed;inset:0;z-index:100;display:none;overflow:hidden;touch-action:none;cursor:grab;
+  background:color-mix(in srgb,var(--bg) 94%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.zoom-ov.on{display:block}
+.zoom-ov.drag{cursor:grabbing}
+.zoom-ov .zoom-item{position:absolute;left:0;top:0;max-width:none!important;max-height:none!important;margin:0!important;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:0 10px 40px rgb(0 0 0 / .3);
+  user-select:none;-webkit-user-drag:none;cursor:inherit}
+.zoom-bar{position:absolute;top:12px;right:12px;z-index:1;display:flex;align-items:center;gap:6px;padding:4px;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.zoom-bar .iconbtn{min-width:34px;height:34px;font-size:.95rem}
+.zoom-pct{min-width:52px;text-align:center;font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.zoom-cap{position:absolute;left:50%;bottom:12px;z-index:1;transform:translateX(-50%);width:max-content;max-width:min(920px,calc(100vw - 32px));
+  padding:8px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--muted);font-size:.85rem;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.zoom-cap:empty{display:none}
+.zoom-cap b{color:var(--ink)}
+
+/* citations */
+a.cite{display:inline-block;font:600 .66rem/1 var(--mono);vertical-align:2px;padding:3px 5px;margin-left:3px;border-radius:5px;
+  background:var(--panel-2);color:var(--muted);text-decoration:none;white-space:nowrap}
+a.cite + a.cite{margin-left:2px}
+a.cite:hover{color:var(--accent)}
+a.cite.broken{background:var(--bad-soft);color:var(--bad)}
+a.cite:target{outline:2px solid var(--accent)}
+ol.sources{list-style:none;padding:0;margin:0 0 14px}
+ol.sources > li{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin:0 0 10px}
+ol.sources > li:target{outline:2px solid var(--accent)}
+.src-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.src-id{font:700 .8rem var(--mono);color:var(--accent);font-variant-numeric:tabular-nums}
+.src-title{font-weight:600}
+.src-type{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 7px;border-radius:999px;
+  background:var(--panel-2);color:var(--muted)}
+.src-loc{font-size:.84rem;margin:6px 0;color:var(--muted);overflow-wrap:anywhere}
+blockquote.src-quote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--line);background:var(--bg);color:var(--ink);font-size:.88rem;border-radius:0 6px 6px 0}
+blockquote.src-quote .tr{display:block;color:var(--muted);margin-top:4px}
+.src-note{font-size:.84rem;color:var(--muted)}
+.backrefs{font-size:.8rem;color:var(--muted);margin-top:4px}
+.backrefs a{margin-right:6px}
+
+/* search hits */
+mark.hit{background:var(--hit);color:inherit;border-radius:2px;padding:0 1px}
+mark.hit.cur{background:var(--hit-cur);outline:2px solid var(--warn)}
+
+footer.doc-foot{color:var(--muted);font-size:.8rem;margin-top:56px;padding-top:14px;border-top:1px solid var(--line)}
+@media (max-width:700px){
+  body{font-size:16px}
+  .wrap{padding:24px 16px 80px}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .doc-head h1{font-size:1.55rem}
+  ol.steps > li{margin-left:46px} ol.steps > li::before{left:-46px}
+}
+@media print{
+  .topbar,.sidebar,.backdrop,.progress,.zoom-ov{display:none!important}
+  .page{margin:0!important}
+  figure.fig,ol.steps > li,.callout{break-inside:avoid-page}
+  details.more{border:none} details.more > .body{display:block}
+  mark.hit{background:none}
+}
+</style>
+</head>
+<body>
+<div class="progress" id="haise-progress"></div>
+
+<header class="topbar no-search">
+  <button class="iconbtn" id="haise-nav-btn" type="button" aria-controls="haise-sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div class="doc-title">Kaneki Auth architecture</div>
+  <div class="search" role="search">
+    <div class="box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="haise-q" type="search" autocomplete="off" spellcheck="false">
+    </div>
+    <span class="count" id="haise-count" aria-live="polite"></span>
+    <button class="iconbtn" id="haise-prev" type="button">▲</button>
+    <button class="iconbtn" id="haise-next" type="button">▼</button>
+  </div>
+  <button class="iconbtn" id="haise-reload" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+  </button>
+  <button class="iconbtn" id="haise-theme" type="button"></button>
+</header>
+
+<aside class="sidebar no-search" id="haise-sidebar">
+  <h2 id="haise-toc-label"></h2>
+  <nav class="toc" id="haise-toc"></nav>
+</aside>
+<div class="backdrop" id="haise-backdrop"></div>
+
+<div class="page">
+<main id="content" class="wrap">
+<!-- ===================== DOCUMENT CONTENT START ===================== -->
+<header class="doc-head">
+  <p class="eyebrow">Architecture · proposal</p>
+  <h1>Kaneki Auth: a free OIDC provider on Vercel, Neon and Better Auth</h1>
+  <p class="sub">How the service is built, how external apps sign users in through it, how each app gets its own user pool, and what keeps it inside the free tiers.</p>
+  <ul class="meta">
+    <li><b>Updated</b>2026-11-10</li>
+    <li><b>Status</b>Draft, nothing built yet</li>
+    <li><b>Repo</b><code>kaneki-auth</code> @ <code>e059b9e</code></li>
+    <li><b>Budget</b>$0 now · ~$10/yr later for a mail domain</li>
+    <li><b>Better Auth</b>1.7.19</li>
+  </ul>
+</header>
+
+<section id="answer">
+  <h2>The design in one page</h2>
+  <div class="verdict">
+    <span class="label">Short answer</span>
+    <p>Kaneki Auth is one Next.js codebase. It is deployed <strong>once per client app</strong> to Vercel's free Hobby plan, and each deployment has its own free Neon database, so every app has its own users. Each deployment runs Better Auth with the <strong>OAuth 2.1 Provider</strong> plugin, so it acts as a standard OpenID Connect server for its app. Users sign in with email + password, Google, or a magic link. <a class="cite" href="#src-1">S1</a><a class="cite" href="#src-17">S17</a><a class="cite" href="#src-2">S2</a></p>
+  </div>
+  <ol class="findings">
+    <li><strong>One deployment per app is how each app gets its own users.</strong> Better Auth makes <code>user.email</code> unique across the whole database, and the organization plugin only groups one global user into teams. Separate users per app therefore means a separate database per app. <a class="cite" href="#src-23">S23</a><a class="cite" href="#src-21">S21</a> <span class="tag sure">VERIFIED</span></li>
+    <li><strong>Tokens are JWTs only when the client asks for a <code>resource</code>.</strong> Without one, the access token is opaque and every API call needs an introspection request. Clients must always send <code>resource</code>. <a class="cite" href="#src-18">S18</a> <span class="tag sure">VERIFIED</span></li>
+    <li><strong>Machine-to-machine:</strong> for service-to-API traffic, use <strong>client credentials</strong>. The JWTs are checked offline and the auth server is not called each time. Use <strong>API keys</strong> for scripts, admin calls and anything that needs per-key quotas. <a class="cite" href="#src-18">S18</a><a class="cite" href="#src-20">S20</a></li>
+    <li><strong>Yes, it needs interactive transactions.</strong> Sign-up, first social sign-in and password reset each write several rows as one unit. The Drizzle adapter has transactions <em>off</em> by default. Turn them on and use Neon's WebSocket <code>Pool</code>. <a class="cite" href="#src-24">S24</a><a class="cite" href="#src-26">S26</a><a class="cite" href="#src-14">S14</a> <span class="tag sure">VERIFIED</span></li>
+    <li><strong>Email starts on Gmail SMTP and moves to Resend later.</strong> Resend needs a verified domain, and buying one is deferred. Until then mail goes through a personal Gmail account with an app password, which allows 500 emails a day. Mail sits behind a single <code>sendMail()</code> interface, so moving to Resend later is a config change. <a class="cite" href="#src-32">S32</a><a class="cite" href="#src-33">S33</a><a class="cite" href="#src-35">S35</a></li>
+    <li><strong>Neon compute is the tightest free limit.</strong> But the budget is per project, so each app's deployment gets its own 100 CU-hours. <a class="cite" href="#src-13">S13</a> <span class="tag sure">VERIFIED</span></li>
+  </ol>
+  <div class="stats">
+    <div class="stat ok"><span class="v">$0</span><span class="k">hosting + database per app</span></div>
+    <div class="stat"><span class="v">25</span><span class="k">apps max from one Git repo (Hobby)</span></div>
+    <div class="stat warn"><span class="v">100 CU-h</span><span class="k">Neon compute per app per month</span></div>
+    <div class="stat"><span class="v">500 / day</span><span class="k">emails via Gmail SMTP (phase 1)</span></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions taken on 2026-11-10</h2>
+  <p>The repository owner answered the six open questions from the first draft. The right-hand column shows what each answer changes in the design. <a class="cite" href="#src-17">S17</a></p>
+  <div class="tbl">
+    <table>
+      <tr><th>#</th><th>Question</th><th>Decision</th><th>Effect on the design</th></tr>
+      <tr><td>1</td><td>Commercial use?</td><td>Personal only</td><td>Vercel Hobby is allowed. The biggest risk in the first draft is gone. <a class="cite" href="#src-10">S10</a></td></tr>
+      <tr><td>2</td><td>Sign-in methods</td><td>Email + password, Google, magic link</td><td>Three of the flows send email, so a mail sender is now required. See <a href="#sign-in-methods">sign-in methods</a>.</td></tr>
+      <tr><td>3</td><td>Issuer URL</td><td>Free Vercel domain</td><td>The issuer is <code>https://&lt;project&gt;.vercel.app</code>. This domain cannot verify an email sender. <a class="cite" href="#src-28">S28</a></td></tr>
+      <tr><td>4</td><td>Machine-to-machine</td><td>Analyse both</td><td>Client credentials for service-to-API calls, API keys for scripts and quotas. See <a href="#m2m">machine-to-machine</a>.</td></tr>
+      <tr><td>5</td><td>Separate users per app</td><td>Yes: one person signing in to app 1 and app 2 has two different accounts</td><td>One deployment and one Neon project per app. The organization plugin is not used. See <a href="#per-app">one user pool per app</a>.</td></tr>
+      <tr><td>6</td><td>Transactions needed?</td><td>Research</td><td>Yes. Set <code>transaction: true</code> and use the WebSocket <code>Pool</code>. See <a href="#transactions">transactions</a>.</td></tr>
+      <tr><td>7</td><td>Mail sender</td><td>Gmail SMTP now. Buy a domain and move to Resend later <a class="cite" href="#src-32">S32</a></td><td>$0 at launch. Mail goes through one interface with two adapters. See <a href="#mail-plan">the mail plan</a>.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="big-picture">
+  <h2>The big picture</h2>
+  <p>Each deployment does three jobs: it shows the sign-in and consent pages, runs the OAuth/OIDC endpoints, and publishes the signing keys. The diagram shows <em>one</em> app's deployment. Every other app gets an identical copy (see <a href="#per-app">one user pool per app</a>).</p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 360" role="img" aria-label="System context: external apps, the Kaneki Auth deployment on Vercel, Neon, Resend and Google">
+    <defs><marker id="arr-ctx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-size="13">
+      <text x="115" y="34" text-anchor="middle" font-weight="600" fill="var(--muted)">One client app's parts</text>
+      <rect x="20" y="60" width="190" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="115" y="86" text-anchor="middle" font-weight="600" fill="var(--ink)">Web app / SPA</text>
+      <text x="115" y="106" text-anchor="middle" font-size="12" fill="var(--muted)">public client + PKCE</text>
+      <rect x="20" y="150" width="190" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="115" y="176" text-anchor="middle" font-weight="600" fill="var(--ink)">App backend / jobs</text>
+      <text x="115" y="196" text-anchor="middle" font-size="12" fill="var(--muted)">confidential client</text>
+      <rect x="20" y="240" width="190" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="115" y="266" text-anchor="middle" font-weight="600" fill="var(--ink)">Resource API</text>
+      <text x="115" y="286" text-anchor="middle" font-size="12" fill="var(--muted)">verifies JWTs offline</text>
+
+      <rect x="285" y="20" width="370" height="320" rx="14" fill="var(--accent-soft)" stroke="var(--accent)" stroke-dasharray="6 4"/>
+      <text x="470" y="44" text-anchor="middle" font-weight="600" fill="var(--accent)">&lt;app&gt;-auth.vercel.app · Next.js</text>
+      <rect x="305" y="62" width="330" height="56" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="470" y="86" text-anchor="middle" font-weight="600" fill="var(--ink)">Sign-in &amp; consent pages</text>
+      <text x="470" y="106" text-anchor="middle" font-size="12" fill="var(--muted)">password · Google · magic link</text>
+      <rect x="305" y="140" width="330" height="80" rx="10" fill="var(--panel)" stroke="var(--accent)"/>
+      <text x="470" y="166" text-anchor="middle" font-weight="600" fill="var(--ink)">Better Auth handler</text>
+      <text x="470" y="186" text-anchor="middle" font-size="12" fill="var(--muted)">/api/auth/[...all]</text>
+      <text x="470" y="206" text-anchor="middle" font-size="12" fill="var(--muted)">oauthProvider · jwt · magicLink · apiKey</text>
+      <rect x="305" y="242" width="330" height="56" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="470" y="266" text-anchor="middle" font-weight="600" fill="var(--ink)">Discovery &amp; JWKS</text>
+      <text x="470" y="286" text-anchor="middle" font-size="12" fill="var(--muted)">public keys, cached by clients</text>
+
+      <rect x="725" y="30" width="160" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="805" y="56" text-anchor="middle" font-weight="600" fill="var(--ink)">Google</text>
+      <text x="805" y="76" text-anchor="middle" font-size="12" fill="var(--muted)">social sign-in</text>
+      <rect x="725" y="140" width="160" height="80" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+      <text x="805" y="168" text-anchor="middle" font-weight="600" fill="var(--ink)">Neon project</text>
+      <text x="805" y="188" text-anchor="middle" font-size="12" fill="var(--muted)">this app's users only</text>
+      <text x="805" y="206" text-anchor="middle" font-size="12" fill="var(--muted)">WebSocket Pool</text>
+      <rect x="725" y="250" width="160" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="805" y="276" text-anchor="middle" font-weight="600" fill="var(--ink)">Mail sender</text>
+      <text x="805" y="296" text-anchor="middle" font-size="12" fill="var(--muted)">Gmail SMTP → Resend</text>
+
+      <line x1="210" y1="90" x2="303" y2="160" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-ctx)"/>
+      <line x1="210" y1="180" x2="303" y2="180" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-ctx)"/>
+      <text x="256" y="172" text-anchor="middle" font-size="12" fill="var(--muted)">OIDC</text>
+      <line x1="210" y1="270" x2="303" y2="270" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arr-ctx)"/>
+      <text x="256" y="262" text-anchor="middle" font-size="12" fill="var(--muted)">JWKS</text>
+      <line x1="635" y1="180" x2="723" y2="180" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-ctx)"/>
+      <text x="679" y="172" text-anchor="middle" font-size="12" fill="var(--muted)">SQL</text>
+      <line x1="635" y1="210" x2="723" y2="270" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-ctx)"/>
+      <line x1="635" y1="150" x2="723" y2="70" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-ctx)"/>
+    </g>
+  </svg>
+  <figcaption>Everything stateful lives in this app's Neon project, so any function instance can serve any request. Resource APIs fetch only the public keys (dashed arrow), never the database. The mail sender is Gmail SMTP until a domain is bought, then Resend. <a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a><a class="cite" href="#src-32">S32</a></figcaption>
+  </figure>
+</section>
+
+<section id="parts">
+  <h2>The parts and why each was chosen</h2>
+  <p>Each part is the free option that fits a stateless, serverless auth server. The brief fixes the three main choices. The rest are chosen to fit them. <a class="cite" href="#src-1">S1</a></p>
+  <div class="tbl">
+    <p class="cap">Building blocks (per app deployment)</p>
+    <table>
+      <tr><th>Part</th><th>Choice</th><th>Role</th><th>Why this one</th></tr>
+      <tr><td>Hosting</td><td>Vercel Hobby, Next.js App Router</td><td>Serves the pages and auth endpoints as functions</td><td>Fixed by the brief. Free for personal use. Includes 1,000,000 function calls and 4 CPU-hours of active CPU. <a class="cite" href="#src-10">S10</a></td></tr>
+      <tr><td>Auth engine</td><td><code>better-auth</code></td><td>Sessions, accounts, password and social sign-in</td><td>Fixed by the brief. Mounted as one catch-all route with <code>toNextJsHandler(auth)</code>. <a class="cite" href="#src-4">S4</a></td></tr>
+      <tr><td>Provider for external apps</td><td><code>@better-auth/oauth-provider</code></td><td>OAuth 2.1 / OIDC authorization server</td><td>Turns a login library into an identity provider for <em>other</em> origins. <a class="cite" href="#src-2">S2</a></td></tr>
+      <tr><td>Token signing</td><td>Better Auth <code>jwt</code> plugin</td><td>Signs JWT access tokens and publishes the JWKS</td><td>Needed for JWT access tokens. Signs with EdDSA by default. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-18">S18</a></td></tr>
+      <tr><td>Passwordless</td><td>Better Auth <code>magicLink</code> plugin</td><td>Emails a one-time sign-in link</td><td>Chosen sign-in method. Links expire after 300 s. <a class="cite" href="#src-30">S30</a></td></tr>
+      <tr><td>Social</td><td><code>socialProviders.google</code></td><td>Google sign-in</td><td>Chosen sign-in method. Sends no email. <a class="cite" href="#src-31">S31</a></td></tr>
+      <tr><td>Machine access</td><td><code>@better-auth/api-key</code></td><td>Keys for scripts and admin calls</td><td>Supports expiry, rate limits and quotas per key. <a class="cite" href="#src-7">S7</a><a class="cite" href="#src-20">S20</a></td></tr>
+      <tr><td>Database</td><td>Neon Postgres, free plan, one project per app</td><td>Users, sessions, clients, consents, keys</td><td>Fixed by the brief. Free forever. 1 GB and 100 CU-hours per project. <a class="cite" href="#src-13">S13</a></td></tr>
+      <tr><td>DB access</td><td>Drizzle ORM + <code>@neondatabase/serverless</code> <code>Pool</code></td><td>Typed queries over WebSocket</td><td>Interactive transactions need the WebSocket driver. <a class="cite" href="#src-14">S14</a><a class="cite" href="#src-27">S27</a></td></tr>
+      <tr><td>Email</td><td>Phase 1: Gmail SMTP via <code>nodemailer</code>. Phase 2: Resend</td><td>Verification, password reset, magic link</td><td>Gmail: $0, 500 a day, no domain needed. Resend: needs a verified domain. <a class="cite" href="#src-33">S33</a><a class="cite" href="#src-28">S28</a></td></tr>
+    </table>
+  </div>
+  <div class="callout tip"><span class="kind">Plugin choice</span>Use the OAuth 2.1 Provider plugin, not the older OIDC Provider plugin. The OIDC Provider docs page returned HTTP 404 on 2026-11-10. The OAuth 2.1 page covers OIDC itself (ID tokens, UserInfo, logout). <a class="cite" href="#src-2">S2</a> <span class="tag infer">INFERRED</span> (no deprecation notice was seen. The 404 only hints that the old plugin is being retired)</div>
+</section>
+
+<section id="sign-in-flow">
+  <h2>How an external app signs a user in</h2>
+  <p>An external app never sees a password. It sends the user to its Kaneki Auth deployment, gets back a one-time code, and swaps the code for tokens. Its API then checks those tokens locally.</p>
+  <div class="phase-key">Hover or tap a stage:
+    <span class="chip p1" data-phase="authorize">Authorize</span><span class="chip p2" data-phase="login">Sign in &amp; consent</span><span class="chip p3" data-phase="exchange">Code exchange</span><span class="chip p4" data-phase="verify">Call &amp; verify</span></div>
+  <ol class="steps">
+    <li class="p1" data-phase="authorize"><strong>Authorize</strong><span class="chip p1">① ②</span>
+      <p>The client creates a random verifier and hashes it into a <code>code_challenge</code>. It then redirects the browser to the auth deployment with its <code>client_id</code>, scopes and the <code>resource</code> (its API's URL). PKCE is required and only <code>S256</code> is accepted. <a class="cite" href="#src-2">S2</a><a class="cite" href="#src-18">S18</a></p></li>
+    <li class="p2" data-phase="login"><strong>Sign in &amp; consent</strong><span class="chip p2">③ ④ ⑤</span>
+      <p>If the browser has no session yet, the auth deployment shows its sign-in page (password, Google, or magic link), then the consent page. Consent is stored per user and client, so the user is asked only once. <a class="cite" href="#src-2">S2</a></p></li>
+    <li class="p3" data-phase="exchange"><strong>Code exchange</strong><span class="chip p3">⑥ ⑦ ⑧</span>
+      <p>The browser returns to the app with a one-time code. The app sends the code and the original verifier to <code>POST /oauth2/token</code>. It gets back an access token (1 h by default), an ID token, and, with <code>offline_access</code>, a rotating refresh token that lasts 30 days. <a class="cite" href="#src-18">S18</a></p></li>
+    <li class="p4" data-phase="verify"><strong>Call &amp; verify</strong><span class="chip p4">⑨ ⑩ ⑪</span>
+      <p>The app calls its API with the access token. Because a <code>resource</code> was requested, the token is a JWT. The API fetches the JWKS once, caches it, and checks every later token's EdDSA signature without a network call. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-18">S18</a></p>
+      <div class="ex"><span class="k">Example</span><code>jose.jwtVerify(token, createRemoteJWKSet(new URL("https://&lt;app&gt;-auth.vercel.app/api/auth/jwks")))</code></div></li>
+  </ol>
+  <figure class="fig">
+  <svg viewBox="0 0 900 540" role="img" aria-label="Sequence of the authorization code flow with PKCE between browser, client app, Kaneki Auth, Neon and a resource API">
+    <defs>
+      <marker id="arr-seq-p1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--p1)"/></marker>
+      <marker id="arr-seq-p2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--p2)"/></marker>
+      <marker id="arr-seq-p3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--p3)"/></marker>
+      <marker id="arr-seq-p4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--p4)"/></marker>
+    </defs>
+    <g font-size="13" fill="var(--ink)">
+      <rect x="30" y="14" width="130" height="34" rx="8" fill="var(--panel)" stroke="var(--line)"/><text x="95" y="36" text-anchor="middle" font-weight="600">User browser</text>
+      <line x1="95" y1="48" x2="95" y2="530" stroke="var(--line)" stroke-dasharray="4 4"/>
+      <rect x="205" y="14" width="130" height="34" rx="8" fill="var(--panel)" stroke="var(--line)"/><text x="270" y="36" text-anchor="middle" font-weight="600">Client app</text>
+      <line x1="270" y1="48" x2="270" y2="530" stroke="var(--line)" stroke-dasharray="4 4"/>
+      <rect x="395" y="14" width="150" height="34" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="470" y="36" text-anchor="middle" font-weight="600">Kaneki Auth</text>
+      <line x1="470" y1="48" x2="470" y2="530" stroke="var(--line)" stroke-dasharray="4 4"/>
+      <rect x="590" y="14" width="120" height="34" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="650" y="36" text-anchor="middle" font-weight="600">Neon</text>
+      <line x1="650" y1="48" x2="650" y2="530" stroke="var(--line)" stroke-dasharray="4 4"/>
+      <rect x="750" y="14" width="130" height="34" rx="8" fill="var(--panel)" stroke="var(--line)"/><text x="815" y="36" text-anchor="middle" font-weight="600">Resource API</text>
+      <line x1="815" y1="48" x2="815" y2="530" stroke="var(--line)" stroke-dasharray="4 4"/>
+      <g data-phase="authorize">
+        <line x1="270" y1="80" x2="99" y2="80" stroke="var(--p1)" stroke-width="1.8" marker-end="url(#arr-seq-p1)"/>
+        <text x="182" y="72" text-anchor="middle" font-size="12" fill="var(--p1)">① redirect + code_challenge</text>
+        <line x1="95" y1="122" x2="466" y2="122" stroke="var(--p1)" stroke-width="1.8" marker-end="url(#arr-seq-p1)"/>
+        <text x="282" y="114" text-anchor="middle" font-size="12" fill="var(--p1)">② authorize (client_id, scope, resource, S256)</text>
+      </g>
+      <g data-phase="login">
+        <line x1="470" y1="164" x2="99" y2="164" stroke="var(--p2)" stroke-width="1.8" marker-end="url(#arr-seq-p2)"/>
+        <text x="282" y="156" text-anchor="middle" font-size="12" fill="var(--p2)">③ sign-in page, then consent page</text>
+        <line x1="95" y1="206" x2="466" y2="206" stroke="var(--p2)" stroke-width="1.8" marker-end="url(#arr-seq-p2)"/>
+        <text x="282" y="198" text-anchor="middle" font-size="12" fill="var(--p2)">④ password / Google / magic link, "Allow"</text>
+        <line x1="470" y1="248" x2="646" y2="248" stroke="var(--p2)" stroke-width="1.8" marker-end="url(#arr-seq-p2)"/>
+        <text x="560" y="240" text-anchor="middle" font-size="12" fill="var(--p2)">⑤ session, consent, code</text>
+      </g>
+      <g data-phase="exchange">
+        <line x1="470" y1="290" x2="274" y2="290" stroke="var(--p3)" stroke-width="1.8" marker-end="url(#arr-seq-p3)"/>
+        <text x="370" y="282" text-anchor="middle" font-size="12" fill="var(--p3)">⑥ redirect_uri?code=…</text>
+        <line x1="270" y1="332" x2="466" y2="332" stroke="var(--p3)" stroke-width="1.8" marker-end="url(#arr-seq-p3)"/>
+        <text x="370" y="324" text-anchor="middle" font-size="12" fill="var(--p3)">⑦ token: code + verifier</text>
+        <line x1="470" y1="374" x2="274" y2="374" stroke="var(--p3)" stroke-width="1.8" marker-end="url(#arr-seq-p3)"/>
+        <text x="370" y="366" text-anchor="middle" font-size="12" fill="var(--p3)">⑧ JWT access, ID, refresh</text>
+      </g>
+      <g data-phase="verify">
+        <line x1="270" y1="416" x2="811" y2="416" stroke="var(--p4)" stroke-width="1.8" marker-end="url(#arr-seq-p4)"/>
+        <text x="560" y="408" text-anchor="middle" font-size="12" fill="var(--p4)">⑨ Authorization: Bearer &lt;access token&gt;</text>
+        <line x1="815" y1="458" x2="474" y2="458" stroke="var(--p4)" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arr-seq-p4)"/>
+        <text x="645" y="450" text-anchor="middle" font-size="12" fill="var(--p4)">⑩ GET JWKS (once, then cached)</text>
+        <path d="M815,488 h40 v26 h-36" fill="none" stroke="var(--p4)" stroke-width="1.8" marker-end="url(#arr-seq-p4)"/>
+        <text x="740" y="506" text-anchor="middle" font-size="12" fill="var(--p4)">⑪ verify signature locally</text>
+      </g>
+    </g>
+  </svg>
+  <figcaption>Colours match the stages above: blue authorize, teal sign-in &amp; consent, violet code exchange, orange call &amp; verify. After step ⑩ the API never calls the auth deployment again for each request, which saves both Vercel calls and Neon compute. <a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a><a class="cite" href="#src-18">S18</a></figcaption>
+  </figure>
+  <div class="callout warn"><span class="kind">Watch out</span><strong>Always send <code>resource</code>.</strong> Without it, the access token is opaque. The API then has to call <code>/oauth2/introspect</code> on every request, authenticating as a registered client, and each of those calls hits Vercel and Neon. <a class="cite" href="#src-18">S18</a><a class="cite" href="#src-19">S19</a></div>
+  <h3 id="client-registration">Registering a new external app</h3>
+  <p>An admin registers each client through the plugin's admin client API. The admin sets its redirect URIs, scopes and client type. Leave open self-service registration (RFC 7591) off. Each app's origin also goes on <code>trustedOrigins</code>, because requests from other origins are blocked. <a class="cite" href="#src-2">S2</a><a class="cite" href="#src-9">S9</a></p>
+</section>
+
+<section id="sign-in-methods">
+  <h2>Sign-in methods and the mail plan</h2>
+  <p>Two of the three chosen methods send email, and so does password reset. Email is therefore part of the core design. It starts on Gmail SMTP and moves to Resend once a domain is bought.</p>
+  <div class="tbl">
+    <table>
+      <tr><th>Method</th><th>Plugin / config</th><th>Emails sent</th><th>Notes</th></tr>
+      <tr><td>Email + password</td><td><code>emailAndPassword</code></td><td>Verification (optional), password reset</td><td>Sign-up writes several rows in one transaction (see <a href="#transactions">transactions</a>). <a class="cite" href="#src-24">S24</a></td></tr>
+      <tr><td>Google</td><td><code>socialProviders.google</code> with <code>clientId</code> and <code>clientSecret</code></td><td>None</td><td>Callback URL is <code>https://&lt;app&gt;-auth.vercel.app/api/auth/callback/google</code>. Set <code>baseURL</code> or the redirect will fail. <a class="cite" href="#src-31">S31</a> Google sign-in with an email that already exists is linked to that user automatically. <a class="cite" href="#src-22">S22</a></td></tr>
+      <tr><td>Magic link</td><td><code>magicLink({ sendMagicLink })</code></td><td>One per sign-in</td><td>Links expire after 300 s. A user is created on first use unless <code>disableSignUp</code> is set. Default limit is 5 requests per 60 s. <a class="cite" href="#src-30">S30</a></td></tr>
+    </table>
+  </div>
+  <div class="callout info"><span class="kind">Why not Resend now</span>Resend sends to anyone other than your own account address only from a domain you have verified with DNS records. A <code>*.vercel.app</code> name is assigned by Vercel and its DNS records are not yours to manage, so it cannot be that domain. <a class="cite" href="#src-28">S28</a><a class="cite" href="#src-29">S29</a> <span class="tag infer">INFERRED</span> (the Vercel docs never say outright that <code>vercel.app</code> records cannot be added. They describe DNS management only for domains you own)</div>
+  <div class="callout ok"><span class="kind">Decided</span>Start with <strong>Gmail SMTP</strong> at $0. Buy a domain later (about $10.46 a year for a <code>.com</code> at Cloudflare, which sells at cost) and switch to Resend. The service does not wait on the domain. <a class="cite" href="#src-32">S32</a></div>
+
+  <h3 id="mail-plan">The mail plan: one interface, two adapters</h3>
+  <p>Better Auth never talks to a mail provider directly. It only calls the send callbacks you give it, such as <code>sendMagicLink</code>. <a class="cite" href="#src-30">S30</a> The names of the verification and reset callbacks are from memory and were not checked in the docs. <span class="tag infer">INFERRED</span> If all three callbacks call one <code>sendMail()</code> function, the provider becomes a detail of that one file.</p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 230" role="img" aria-label="Better Auth callbacks call one sendMail interface backed by an SMTP adapter now and a Resend adapter later">
+    <defs><marker id="arr-mail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-size="13">
+      <rect x="20" y="20" width="230" height="44" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="135" y="47" text-anchor="middle" fill="var(--ink)">sendVerificationEmail</text>
+      <rect x="20" y="92" width="230" height="44" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="135" y="119" text-anchor="middle" fill="var(--ink)">sendResetPassword</text>
+      <rect x="20" y="164" width="230" height="44" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="135" y="191" text-anchor="middle" fill="var(--ink)">sendMagicLink</text>
+      <line x1="250" y1="42" x2="338" y2="104" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-mail)"/>
+      <line x1="250" y1="114" x2="338" y2="114" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-mail)"/>
+      <line x1="250" y1="186" x2="338" y2="124" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-mail)"/>
+      <rect x="340" y="82" width="200" height="64" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="440" y="108" text-anchor="middle" font-weight="600" fill="var(--ink)">sendMail(to, subject, html)</text>
+      <text x="440" y="128" text-anchor="middle" font-size="12" fill="var(--muted)">src/lib/email.ts · MAIL_PROVIDER</text>
+      <g data-phase="smtp">
+        <line x1="540" y1="104" x2="638" y2="56" stroke="var(--p2)" stroke-width="1.8" marker-end="url(#arr-mail)"/>
+        <rect x="640" y="20" width="240" height="64" rx="10" fill="var(--p2-soft)" stroke="var(--p2)"/>
+        <text x="760" y="46" text-anchor="middle" font-weight="600" fill="var(--ink)">Phase 1 · smtp</text>
+        <text x="760" y="66" text-anchor="middle" font-size="12" fill="var(--muted)">nodemailer → smtp.gmail.com:465</text>
+      </g>
+      <g data-phase="resend">
+        <line x1="540" y1="124" x2="638" y2="172" stroke="var(--p4)" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arr-mail)"/>
+        <rect x="640" y="144" width="240" height="64" rx="10" fill="var(--p4-soft)" stroke="var(--p4)" stroke-dasharray="6 4"/>
+        <text x="760" y="170" text-anchor="middle" font-weight="600" fill="var(--ink)">Phase 2 · resend</text>
+        <text x="760" y="190" text-anchor="middle" font-size="12" fill="var(--muted)">HTTP API, own domain</text>
+      </g>
+    </g>
+  </svg>
+  <figcaption>Switching providers means setting <code>MAIL_PROVIDER=resend</code> and adding the Resend key. No Better Auth config or page changes. The dashed adapter does not exist until phase 2. The callbacks come from Better Auth. <a class="cite" href="#src-30">S30</a> The interface is <span class="tag infer">INFERRED</span> (a proposed design, not built yet).</figcaption>
+  </figure>
+  <div class="phase-key">Hover or tap a phase:
+    <span class="chip p2" data-phase="smtp">Phase 1 · Gmail SMTP</span><span class="chip p4" data-phase="resend">Phase 2 · Resend</span></div>
+  <ol class="steps">
+    <li class="p2" data-phase="smtp"><strong>Phase 1: Gmail SMTP ($0)</strong><span class="chip p2">now</span>
+      <p>Turn on 2-Step Verification on a <em>dedicated</em> Gmail account (not your personal one), then create an app password. App passwords "can only be used with accounts that have 2-Step Verification turned on". <a class="cite" href="#src-34">S34</a> Connect with <code>nodemailer</code> to <code>smtp.gmail.com</code> on port 465 (SSL) or 587 (STARTTLS). <a class="cite" href="#src-36">S36</a> Vercel blocks port 25, but "ports 465 and 587 stay open". <a class="cite" href="#src-35">S35</a></p>
+      <div class="ex"><span class="k">Env</span><code>MAIL_PROVIDER=smtp · SMTP_HOST=smtp.gmail.com · SMTP_PORT=465 · SMTP_USER=…@gmail.com · SMTP_PASS=&lt;app password&gt;</code></div></li>
+    <li class="p4" data-phase="resend"><strong>Phase 2: own domain + Resend (~$10.46/yr)</strong><span class="chip p4">later</span>
+      <p>Buy the domain, add it in Resend, copy the DNS records Resend gives you, and verify. Then set <code>MAIL_PROVIDER=resend</code> on every app's deployment. Sign-in stays on <code>vercel.app</code>. The domain is used only for sending. <a class="cite" href="#src-28">S28</a></p></li>
+  </ol>
+  <div class="tbl">
+    <p class="cap">What changes between the phases</p>
+    <table>
+      <tr><th></th><th>Phase 1: Gmail SMTP</th><th>Phase 2: Resend</th></tr>
+      <tr><td>Cost</td><td>$0</td><td>~$10.46 / year for the domain</td></tr>
+      <tr><td>Daily limit</td><td>500 emails; when exceeded, sending resumes "within 1 to 24 hours" <a class="cite" href="#src-33">S33</a></td><td>100 emails, 3,000 / month (free plan) <a class="cite" href="#src-16">S16</a></td></tr>
+      <tr><td>Sender address</td><td>The Gmail address itself <span class="tag infer">INFERRED</span></td><td><code>no-reply@&lt;your-domain&gt;</code></td></tr>
+      <tr><td>Deliverability</td><td>Fair for low volume. Some messages may land in spam <span class="tag infer">INFERRED</span></td><td>Better: SPF/DKIM on your own domain, as Gmail asks of all senders <a class="cite" href="#src-37">S37</a></td></tr>
+      <tr><td>On Vercel</td><td>Works on 465/587, but each send must be <code>await</code>ed, or the function can end before the mail leaves <a class="cite" href="#src-35">S35</a></td><td>Plain HTTP call. Vercel's guide recommends an email API over SMTP <a class="cite" href="#src-35">S35</a></td></tr>
+    </table>
+  </div>
+  <div class="callout warn"><span class="kind">Watch out</span>Google says app passwords "aren't recommended" and they are revoked whenever the account password changes. Use a separate Gmail account just for sending, keep the app password only in Vercel env vars, and expect to re-create it now and then. <a class="cite" href="#src-34">S34</a></div>
+</section>
+
+<section id="m2m">
+  <h2>Machine-to-machine: client credentials or API keys?</h2>
+  <p>Both work, and they solve different problems. <strong>Client credentials</strong> gives short-lived JWTs that APIs check offline, so it suits frequent service-to-API calls. <strong>API keys</strong> are long-lived secrets checked by the auth server on every use, so they suit scripts, admin calls and anything that needs per-key quotas.</p>
+  <div class="tbl">
+    <p class="cap">Side by side</p>
+    <table>
+      <tr><th>Criterion</th><th>Client credentials (OAuth provider)</th><th>API key plugin</th></tr>
+      <tr><td>Standard</td><td class="good">✓ OAuth 2.1 grant. Any OAuth library can use it. <a class="cite" href="#src-18">S18</a></td><td>Better Auth specific. Sent in the <code>x-api-key</code> header. <a class="cite" href="#src-20">S20</a></td></tr>
+      <tr><td>Credential lifetime</td><td class="good">✓ Access token lasts 1 h (<code>m2mAccessTokenExpiresIn</code>), so a leak is short-lived. <a class="cite" href="#src-18">S18</a></td><td>Long-lived, with an optional expiry. <a class="cite" href="#src-7">S7</a></td></tr>
+      <tr><td>Check cost per request</td><td class="good">✓ None when <code>resource</code> is sent, because the API verifies the JWT against the cached JWKS. <a class="cite" href="#src-18">S18</a></td><td class="badv">✗ Each check is a call to <code>/api-key/verify</code>, which reads the database and updates usage counters. <a class="cite" href="#src-20">S20</a></td></tr>
+      <tr><td>Who it acts as</td><td>The client app itself, with no user. "A <code>client_credentials</code> JWT has no session." <a class="cite" href="#src-18">S18</a></td><td>The user (or organization) that owns the key. <a class="cite" href="#src-7">S7</a></td></tr>
+      <tr><td>Permissions</td><td>Admin-allowed <code>client_credentials_scopes</code>. <code>openid</code>, <code>profile</code>, <code>email</code> and <code>offline_access</code> are not allowed. <a class="cite" href="#src-18">S18</a></td><td>Per-key metadata and permissions. <a class="cite" href="#src-7">S7</a></td></tr>
+      <tr><td>Quotas &amp; rate limits</td><td class="badv">✗ Not built in</td><td class="good">✓ Rate limits per key, plus a remaining count that can refill. <a class="cite" href="#src-20">S20</a></td></tr>
+      <tr><td>Revocation</td><td>Takes effect when the token expires (≤ 1 h) <span class="tag infer">INFERRED</span></td><td class="good">✓ Immediate, because every use is checked <span class="tag infer">INFERRED</span></td></tr>
+      <tr><td>Setup per caller</td><td>Register a client and allow the grant. "A client cannot use the <code>client_credentials</code> grant until you allow it". <a class="cite" href="#src-18">S18</a></td><td>Create a key and copy it once.</td></tr>
+    </table>
+  </div>
+  <div class="grid2">
+    <div class="card ok"><h4>Use client credentials for…</h4>
+      <ul>
+        <li>An app's backend, cron job or worker calling that app's resource API</li>
+        <li>Any high-volume call. On the free tier, a check that skips the auth server costs nothing.</li>
+        <li>Callers that already have an OAuth library</li>
+      </ul></div>
+    <div class="card info"><h4>Use API keys for…</h4>
+      <ul>
+        <li>Your own scripts and CLI calling the auth deployment's admin API</li>
+        <li>Low-volume integrations where pasting one secret is easier than an OAuth flow</li>
+        <li>Cases that need per-key quotas, refills or instant revocation</li>
+      </ul></div>
+  </div>
+  <div class="callout tldr"><span class="kind">In short</span>Default to client credentials with a <code>resource</code>. Use an API key only where an OAuth client is overkill or a quota is the point. Never put API keys on a hot path: each check costs a Vercel call and Neon compute.</div>
+</section>
+
+<section id="per-app">
+  <h2>One user pool per app</h2>
+  <p>Separate accounts per app ("user A in app 1 and app 2 are two accounts") needs one Better Auth database per app. Multi-tenancy inside a single database is not the answer here.</p>
+  <h3 id="why-not-org">Why the organization plugin does not fit</h3>
+  <p>The organization plugin groups <em>one</em> global user into many organizations. Members are invited, and "a user is a member of" several organizations. <a class="cite" href="#src-21">S21</a> On top of that, the core schema makes <code>user.email</code> <code>unique: true</code> for the whole database. Two accounts with the same email cannot exist side by side in one instance. <a class="cite" href="#src-23">S23</a></p>
+  <div class="tbl">
+    <p class="cap">Options for per-app user pools</p>
+    <table>
+      <tr><th>Option</th><th>Separate accounts per app</th><th>Uses Better Auth as designed</th><th>Free-tier fit</th><th>Ops effort</th></tr>
+      <tr class="hl"><td><strong>A. One deployment + one Neon project per app</strong></td><td class="good">✓ Separate databases</td><td class="good">✓</td><td class="good">✓ Each app gets its own 100 CU-h and 1 GB. Up to 25 apps per Git repo. <a class="cite" href="#src-11">S11</a><a class="cite" href="#src-13">S13</a></td><td>N deployments and N migrations</td></tr>
+      <tr><td>B. One deployment, one Postgres schema per app, auth instance chosen by path</td><td class="good">✓</td><td class="badv">✗ Custom multi-instance routing, not documented</td><td>All apps share one compute budget</td><td>One deploy, but custom code</td></tr>
+      <tr><td>C. Organization plugin</td><td class="badv">✗ One global user <a class="cite" href="#src-21">S21</a></td><td class="good">✓</td><td class="good">✓</td><td>Low</td></tr>
+      <tr><td>D. <code>tenant_id</code> column on <code>user</code></td><td class="badv">✗ <code>email</code> is unique for the whole table <a class="cite" href="#src-23">S23</a></td><td class="badv">✗ Fights the schema</td><td class="good">✓</td><td>High</td></tr>
+    </table>
+  </div>
+  <figure class="fig">
+  <svg viewBox="0 0 900 300" role="img" aria-label="One repository deployed as one auth deployment and Neon project per app">
+    <defs><marker id="arr-pool" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-size="13">
+      <rect x="330" y="14" width="240" height="44" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="450" y="34" text-anchor="middle" font-weight="600" fill="var(--ink)">kaneki-auth repo</text>
+      <text x="450" y="50" text-anchor="middle" font-size="12" fill="var(--muted)">one codebase, one config per app</text>
+      <line x1="400" y1="58" x2="200" y2="96" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-pool)"/>
+      <line x1="500" y1="58" x2="700" y2="96" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-pool)"/>
+
+      <rect x="60" y="98" width="300" height="56" rx="10" fill="var(--p1-soft)" stroke="var(--p1)"/>
+      <text x="210" y="122" text-anchor="middle" font-weight="600" fill="var(--ink)">app1-auth.vercel.app</text>
+      <text x="210" y="142" text-anchor="middle" font-size="12" fill="var(--muted)">Vercel project · issuer for app 1</text>
+      <rect x="60" y="180" width="300" height="56" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+      <text x="210" y="204" text-anchor="middle" font-weight="600" fill="var(--ink)">Neon project app1</text>
+      <text x="210" y="224" text-anchor="middle" font-size="12" fill="var(--muted)">user: a@mail.com (id u-17)</text>
+      <line x1="210" y1="154" x2="210" y2="178" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-pool)"/>
+
+      <rect x="540" y="98" width="300" height="56" rx="10" fill="var(--p3-soft)" stroke="var(--p3)"/>
+      <text x="690" y="122" text-anchor="middle" font-weight="600" fill="var(--ink)">app2-auth.vercel.app</text>
+      <text x="690" y="142" text-anchor="middle" font-size="12" fill="var(--muted)">Vercel project · issuer for app 2</text>
+      <rect x="540" y="180" width="300" height="56" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+      <text x="690" y="204" text-anchor="middle" font-weight="600" fill="var(--ink)">Neon project app2</text>
+      <text x="690" y="224" text-anchor="middle" font-size="12" fill="var(--muted)">user: a@mail.com (id u-03)</text>
+      <line x1="690" y1="154" x2="690" y2="178" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-pool)"/>
+
+      <text x="450" y="214" text-anchor="middle" font-size="12" fill="var(--bad)">no shared data</text>
+      <rect x="330" y="256" width="240" height="36" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+      <text x="450" y="279" text-anchor="middle" font-size="12" fill="var(--ink)">shared: mail sender, Google OAuth app</text>
+    </g>
+  </svg>
+  <figcaption>Option A: the same person has two unrelated accounts, with different ids, passwords and sessions. Signing in to app 1 never signs them in to app 2, which is exactly what was asked for. Only the mail sender and, optionally, one Google OAuth client with a redirect URI per deployment are shared. <a class="cite" href="#src-17">S17</a><a class="cite" href="#src-31">S31</a></figcaption>
+  </figure>
+  <div class="callout tip"><span class="kind">Recommendation</span>Choose <strong>option A</strong>. It uses Better Auth exactly as documented and isolates apps completely. It also multiplies the free Neon budget, since compute and storage are counted per project. The costs are one Vercel project, one Neon project and one set of env vars per app, plus running migrations against every database. A small script handles that. Reconsider option B only if you outgrow 25 apps per repo. <a class="cite" href="#src-11">S11</a><a class="cite" href="#src-13">S13</a></div>
+</section>
+
+<section id="data">
+  <h2>What is stored in Neon</h2>
+  <p>Each app's database holds the same tables. Four core tables record who the user is and how they signed in, and the plugins add their own. The Better Auth CLI generates all of them, and Drizzle applies them. <a class="cite" href="#src-5">S5</a><a class="cite" href="#src-6">S6</a></p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 250" role="img" aria-label="Core Better Auth tables and plugin tables">
+    <defs><marker id="arr-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-size="13">
+      <text x="20" y="24" font-weight="600" fill="var(--muted)">Core (always present)</text>
+      <rect x="20" y="40" width="160" height="60" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="100" y="66" text-anchor="middle" font-weight="600" fill="var(--ink)">user</text>
+      <text x="100" y="86" text-anchor="middle" font-size="12" fill="var(--muted)">email is unique</text>
+      <rect x="250" y="40" width="160" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="330" y="66" text-anchor="middle" font-weight="600" fill="var(--ink)">session</text>
+      <text x="330" y="86" text-anchor="middle" font-size="12" fill="var(--muted)">one signed-in browser</text>
+      <rect x="250" y="120" width="160" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="330" y="146" text-anchor="middle" font-weight="600" fill="var(--ink)">account</text>
+      <text x="330" y="166" text-anchor="middle" font-size="12" fill="var(--muted)">password or Google</text>
+      <rect x="20" y="170" width="160" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="100" y="196" text-anchor="middle" font-weight="600" fill="var(--ink)">verification</text>
+      <text x="100" y="216" text-anchor="middle" font-size="12" fill="var(--muted)">reset / magic-link tokens</text>
+      <line x1="180" y1="70" x2="248" y2="70" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-data)"/>
+      <text x="214" y="62" text-anchor="middle" font-size="12" fill="var(--muted)">1 : n</text>
+      <path d="M180,85 Q215,150 248,150" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#arr-data)"/>
+      <text x="200" y="140" text-anchor="middle" font-size="12" fill="var(--muted)">1 : n</text>
+
+      <rect x="470" y="30" width="410" height="200" rx="14" fill="none" stroke="var(--line)" stroke-dasharray="6 4"/>
+      <text x="490" y="54" font-weight="600" fill="var(--muted)">Added by plugins (names set by the CLI)</text>
+      <rect x="490" y="70" width="180" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="580" y="96" text-anchor="middle" font-weight="600" fill="var(--ink)">OAuth data</text>
+      <text x="580" y="116" text-anchor="middle" font-size="12" fill="var(--muted)">clients, consents, tokens</text>
+      <rect x="680" y="70" width="180" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="770" y="96" text-anchor="middle" font-weight="600" fill="var(--ink)">Signing keys</text>
+      <text x="770" y="116" text-anchor="middle" font-size="12" fill="var(--muted)">JWKS key pairs</text>
+      <rect x="490" y="150" width="180" height="60" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+      <text x="580" y="176" text-anchor="middle" font-weight="600" fill="var(--ink)">API keys</text>
+      <text x="580" y="196" text-anchor="middle" font-size="12" fill="var(--muted)">hashed keys + limits</text>
+      <rect x="680" y="150" width="180" height="60" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+      <text x="770" y="176" text-anchor="middle" font-weight="600" fill="var(--ink)">rateLimit</text>
+      <text x="770" y="196" text-anchor="middle" font-size="12" fill="var(--muted)">shared counters</text>
+    </g>
+  </svg>
+  <figcaption>The core tables are fixed by Better Auth, and <code>user.email</code> is unique. Plugin table names come from the CLI, so check them in the generated schema. <code>rateLimit</code> is the one name the docs give directly. Opaque OAuth tokens are stored as hashes. <a class="cite" href="#src-5">S5</a><a class="cite" href="#src-8">S8</a><a class="cite" href="#src-18">S18</a><a class="cite" href="#src-23">S23</a></figcaption>
+  </figure>
+  <div class="callout warn"><span class="kind">Watch out</span><strong>Migrations:</strong> with Drizzle, run <code>npx auth@latest generate</code>, then <code>npx drizzle-kit generate</code>, then <code>npx drizzle-kit migrate</code>. The CLI's <code>migrate</code> command works only with the built-in Kysely adapter. Run migrations over Neon's <em>direct</em> connection, and repeat them for every app's database. <a class="cite" href="#src-5">S5</a><a class="cite" href="#src-6">S6</a><a class="cite" href="#src-15">S15</a></div>
+</section>
+
+<section id="transactions">
+  <h2>Does it need interactive transactions? Yes</h2>
+  <p>Several Better Auth flows write more than one row and must succeed or fail as a unit. They run JavaScript between the queries, so they need an <em>interactive</em> transaction. Neon's HTTP driver cannot provide one.</p>
+  <div class="tbl">
+    <p class="cap">Flows that Better Auth 1.7.19 wraps in <code>runWithTransaction</code></p>
+    <table>
+      <tr><th>Flow</th><th>Writes inside the transaction</th><th>Source</th></tr>
+      <tr><td>Email + password sign-up</td><td>Create user → link credential account → create session</td><td><code>api/routes/sign-up.mjs:144</code> <a class="cite" href="#src-24">S24</a></td></tr>
+      <tr><td>First Google sign-in</td><td>Create user → create account</td><td><code>oauth2/link-account.mjs:308</code> <a class="cite" href="#src-24">S24</a></td></tr>
+      <tr><td>Password reset</td><td>Consume reset token → revoke sessions → write new password</td><td><code>utils/password.mjs:32</code> <a class="cite" href="#src-24">S24</a></td></tr>
+      <tr><td>Update user</td><td>Update user → refresh session</td><td><code>api/routes/update-user.mjs:173</code> <a class="cite" href="#src-24">S24</a></td></tr>
+    </table>
+  </div>
+  <figure class="fig">
+    <div class="grid2">
+      <div class="card bad"><h4>Drizzle default: <code>transaction: false</code></h4>
+        <p>The callback runs "as is": each write commits on its own. Suppose <code>linkAccount</code> fails after <code>createUser</code> succeeded. The <code>user</code> row stays behind with no password account, its email is now taken, and the person cannot sign up again. <a class="cite" href="#src-25">S25</a><a class="cite" href="#src-26">S26</a></p>
+        <p><span class="tag infer">INFERRED</span> (the "email taken" result follows from <code>email</code> being unique. It was not reproduced)</p></div>
+      <div class="card ok"><h4>Recommended: <code>transaction: true</code> + <code>Pool</code></h4>
+        <p>The adapter wraps the callback in <code>db.transaction(…)</code>, so a failure rolls back every write and the user can simply retry. This needs a driver that holds one connection for the whole transaction: Neon's WebSocket <code>Pool</code> through <code>drizzle-orm/neon-serverless</code>. <a class="cite" href="#src-26">S26</a><a class="cite" href="#src-14">S14</a><a class="cite" href="#src-27">S27</a></p></div>
+    </div>
+    <figcaption>The same sign-up failure under both settings. Better Auth's own code comment says that without a real transaction, writes "are applied as they happen and cannot roll back". <a class="cite" href="#src-25">S25</a></figcaption>
+  </figure>
+  <pre><code>// src/lib/db.ts
+import { Pool } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+export const db = drizzle({ client: new Pool({ connectionString: process.env.DATABASE_URL }) });
+
+// src/lib/auth.ts
+database: drizzleAdapter(db, { provider: "pg", transaction: true }),</code></pre>
+  <p>Simple single-row operations need no transaction even on Postgres. The Drizzle adapter's <code>consumeOne</code> and <code>incrementOne</code> are single atomic statements (<code>DELETE … RETURNING</code> and <code>UPDATE … RETURNING</code>), and it only opens its own transactions for MySQL. <a class="cite" href="#src-26">S26</a> PgBouncer's transaction pooling mode is built to carry transactions, so the pooled URL still works. <a class="cite" href="#src-15">S15</a></p>
+  <div class="callout info"><span class="kind">Trade-off</span>HTTP is Neon's fastest mode for single queries. The WebSocket <code>Pool</code> costs a connection handshake on a cold function. That is the price of correct sign-ups, and it applies to every query because the adapter uses one driver. <a class="cite" href="#src-14">S14</a> <span class="tag infer">INFERRED</span> (latency not measured)</div>
+</section>
+
+<section id="serverless-rules">
+  <h2>Rules that make it work on serverless</h2>
+  <p>Vercel may run each request on a different short-lived instance. Every rule below follows from that.</p>
+  <ol class="steps">
+    <li><strong>Connect through the pooler.</strong> Use the <code>-pooler</code> host. PgBouncer accepts up to 10,000 client connections, against 112 direct connections at 0.25 CU. <a class="cite" href="#src-15">S15</a></li>
+    <li><strong>Use the WebSocket <code>Pool</code> and <code>transaction: true</code>.</strong> See <a href="#transactions">transactions</a>. <a class="cite" href="#src-14">S14</a><a class="cite" href="#src-26">S26</a></li>
+    <li><strong>Store rate-limit counters in the database.</strong> The default in-memory store "may not be suitable … particularly in serverless environments". Set <code>rateLimit.storage: "database"</code>. <a class="cite" href="#src-8">S8</a></li>
+    <li><strong>Keep sessions in Postgres, with no secondary store.</strong> If a Redis-style store is added later, also set <code>session.storeSessionInDatabase: true</code>, because the OAuth provider and API-key plugins need it. <a class="cite" href="#src-2">S2</a></li>
+    <li><strong>Run on the Node runtime, not Edge.</strong> In the Vercel Edge runtime, a WebSocket connection cannot outlive a single request. <a class="cite" href="#src-14">S14</a></li>
+    <li><strong>Run clean-up jobs daily at most.</strong> Hobby cron jobs run only once a day and may fire up to 59 minutes late. <a class="cite" href="#src-12">S12</a></li>
+    <li><strong>Expect a cold first request.</strong> Neon suspends compute after 5 idle minutes, and on Free this cannot be turned off. <a class="cite" href="#src-13">S13</a></li>
+  </ol>
+</section>
+
+<section id="free-budget">
+  <h2>Staying at $0: the free-tier budget</h2>
+  <p>Each free plan caps a different resource. Neon compute runs out first, but it is counted per project, so each app has its own budget.</p>
+  <div class="tbl">
+    <p class="cap">Free limits that matter (read on 2026-11-10)</p>
+    <table>
+      <tr><th>Service</th><th>Limit</th><th>Scope</th><th>Risk</th></tr>
+      <tr class="hl"><td>Neon</td><td>100 CU-hours / month <a class="cite" href="#src-13">S13</a></td><td>per app (project)</td><td><span class="sev high">High</span></td></tr>
+      <tr><td>Neon</td><td>5 GB transfer / month; 1 GB storage; 10 branches <a class="cite" href="#src-13">S13</a></td><td>per app (project)</td><td><span class="sev low">Low</span></td></tr>
+      <tr><td>Neon</td><td>100 projects; 20 GB storage in total <a class="cite" href="#src-13">S13</a></td><td>account</td><td><span class="sev low">Low</span></td></tr>
+      <tr><td>Vercel</td><td>1,000,000 function calls; 4 CPU-hours active CPU; 100 GB transfer <a class="cite" href="#src-10">S10</a></td><td>account (shared by all apps)</td><td><span class="sev med">Medium</span></td></tr>
+      <tr><td>Vercel</td><td>25 projects per Git repo; logs kept 1 hour <a class="cite" href="#src-11">S11</a></td><td>account</td><td><span class="sev med">Medium</span></td></tr>
+      <tr><td>Gmail SMTP (phase 1)</td><td>500 emails / day <a class="cite" href="#src-33">S33</a></td><td>one Gmail account shared by all apps</td><td><span class="sev low">Low</span></td></tr>
+      <tr><td>Resend (phase 2)</td><td>100 emails / day, 3,000 / month <a class="cite" href="#src-16">S16</a></td><td>account (shared by all apps)</td><td><span class="sev med">Medium</span></td></tr>
+    </table>
+  </div>
+  <figure class="fig">
+  <svg viewBox="0 0 900 170" role="img" aria-label="Neon compute budget against hours in a month">
+    <g font-size="13" fill="var(--ink)">
+      <text x="250" y="40" text-anchor="end">Hours in a month</text>
+      <rect x="260" y="24" width="580" height="24" rx="4" fill="var(--c1)"/>
+      <text x="846" y="41" font-weight="600">730</text>
+      <text x="250" y="88" text-anchor="end">Free budget at 0.25 CU</text>
+      <rect x="260" y="72" width="318" height="24" rx="4" fill="var(--c3)"/>
+      <text x="584" y="89" font-weight="600">400</text>
+      <text x="250" y="136" text-anchor="end">Free budget at 2 CU (max)</text>
+      <rect x="260" y="120" width="40" height="24" rx="4" fill="var(--c2)"/>
+      <text x="306" y="137" font-weight="600">50</text>
+    </g>
+  </svg>
+  <figcaption>Hours of awake compute that each app's 100 free CU-hours buy (100 ÷ CU size). If requests arrive every few minutes, the compute never sleeps and runs out mid-month. Fix the compute size at 0.25 CU. <a class="cite" href="#src-13">S13</a> <span class="tag infer">INFERRED</span> (arithmetic)</figcaption>
+  </figure>
+  <div class="callout tldr"><span class="kind">In short</span>Traffic spread evenly through the day costs more Neon compute than the same traffic in bursts. JWT access tokens (always send <code>resource</code>), JWKS caching, and client credentials instead of API keys on hot paths are the main ways to save. <span class="tag infer">INFERRED</span></div>
+  <p>When a limit is reached, Neon suspends that project's compute until the month resets. <a class="cite" href="#src-13">S13</a> A Vercel feature can stay blocked for up to 30 days. <a class="cite" href="#src-10">S10</a> Either way, sign-in fails for the affected apps.</p>
+</section>
+
+<section id="security">
+  <h2>Security settings to have on from day one</h2>
+  <div class="tbl">
+    <table>
+      <tr><th>Setting</th><th>Value</th><th>Why</th></tr>
+      <tr><td>PKCE</td><td>Required, <code>S256</code> only (the default)</td><td>A stolen authorization code is useless without the verifier. <a class="cite" href="#src-2">S2</a></td></tr>
+      <tr><td><code>trustedOrigins</code></td><td>That app's origins only. No <code>localhost</code> in production</td><td>Blocks CSRF and open redirects. <a class="cite" href="#src-9">S9</a></td></tr>
+      <tr><td><code>baseURL</code> / <code>BETTER_AUTH_URL</code></td><td>The deployment's own <code>vercel.app</code> URL</td><td>Otherwise Google sign-in fails with <code>redirect_uri_mismatch</code>. <a class="cite" href="#src-31">S31</a></td></tr>
+      <tr><td>JWT key rotation</td><td><code>rotationInterval</code> (for example 30 days) + <code>gracePeriod</code></td><td>Off by default. <a class="cite" href="#src-3">S3</a></td></tr>
+      <tr><td>JWT plugin <code>/token</code> and <code>set-auth-jwt</code></td><td>Disabled</td><td>The OAuth provider docs say to turn these off. <a class="cite" href="#src-2">S2</a></td></tr>
+      <tr><td>Client credentials grant</td><td>Allowed only on clients that need it</td><td>It is off per client until an admin allows it. <a class="cite" href="#src-18">S18</a></td></tr>
+      <tr><td>Magic-link sign-up</td><td>Decide per app: <code>disableSignUp: true</code> for invite-only apps</td><td>Otherwise the first link to a new address creates an account. <a class="cite" href="#src-30">S30</a></td></tr>
+      <tr><td>Rate limiting</td><td>On, stored in the database</td><td>The limit holds across all instances. <a class="cite" href="#src-8">S8</a></td></tr>
+      <tr><td>Secrets</td><td>Separate values per app and per environment</td><td>A leak in one app does not expose another. <span class="tag infer">INFERRED</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="layout">
+  <h2>Repository layout and environments</h2>
+  <p>One Next.js codebase, deployed once per app. Only the route path comes from the Better Auth docs. The rest is a proposal. <a class="cite" href="#src-4">S4</a></p>
+  <pre><code>kaneki-auth/
+├─ src/
+│  ├─ app/
+│  │  ├─ api/auth/[...all]/route.ts   # export const { GET, POST } = toNextJsHandler(auth)
+│  │  ├─ sign-in/page.tsx             # password, Google, magic link
+│  │  ├─ consent/page.tsx             # "App X wants access to…"
+│  │  └─ admin/…                      # client registration (admin only)
+│  ├─ lib/
+│  │  ├─ auth.ts                      # betterAuth({ plugins: [jwt(), oauthProvider(), magicLink(), apiKey(), admin()] })
+│  │  ├─ db.ts                        # Neon Pool + drizzle (neon-serverless)
+│  │  └─ email.ts                     # sendMail(): MAIL_PROVIDER=smtp | resend
+│  └─ db/schema.ts                    # generated by `npx auth@latest generate`
+├─ drizzle/                           # SQL migrations (drizzle-kit)
+├─ scripts/migrate-all.ts             # runs migrations against every app's direct URL
+└─ docs/architecture.html             # this file</code></pre>
+  <div class="tbl">
+    <p class="cap">Per app: what differs between deployments</p>
+    <table>
+      <tr><th>Item</th><th>Example for app 1</th><th>Where</th></tr>
+      <tr><td>Vercel project</td><td><code>app1-auth</code> → <code>https://app1-auth.vercel.app</code></td><td>Vercel, same Git repo</td></tr>
+      <tr><td>Neon project</td><td><code>app1-auth</code>, compute fixed at 0.25 CU</td><td>Neon</td></tr>
+      <tr><td>Env vars</td><td><code>BETTER_AUTH_URL</code>, <code>BETTER_AUTH_SECRET</code>, <code>DATABASE_URL</code> (pooled), <code>DATABASE_URL_UNPOOLED</code>, <code>GOOGLE_CLIENT_ID/SECRET</code>, mail key</td><td>Vercel project settings</td></tr>
+      <tr><td>Google redirect URI</td><td><code>https://app1-auth.vercel.app/api/auth/callback/google</code></td><td>Google Cloud console <a class="cite" href="#src-31">S31</a></td></tr>
+      <tr><td>Registered OAuth clients</td><td>app 1's web client, plus a backend client if needed</td><td>That deployment's admin API</td></tr>
+    </table>
+  </div>
+  <p>Preview deployments of every app can share one <code>staging</code> Neon project. That avoids using up the 10-branch limit of each app's project. <a class="cite" href="#src-13">S13</a> The repo belongs to a personal GitHub account, which matters because Hobby projects cannot connect to repos owned by a Git <em>organization</em>. <a class="cite" href="#src-11">S11</a></p>
+</section>
+
+<section id="risks">
+  <h2>Risks and limits</h2>
+  <div class="tbl">
+    <table>
+      <tr><th>Risk</th><th>Severity</th><th>Mitigation</th></tr>
+      <tr><td>Gmail SMTP mail lands in spam, or the app password is revoked <a class="cite" href="#src-34">S34</a></td><td><span class="sev med">Medium</span></td><td>Dedicated sending account. Google sign-in works without email. Move to phase 2 when affordable.</td></tr>
+      <tr><td>A send is dropped because the function ends first <a class="cite" href="#src-35">S35</a></td><td><span class="sev med">Medium</span></td><td>Always <code>await</code> <code>sendMail()</code> inside the callback.</td></tr>
+      <tr><td>Neon compute runs out for a busy app <a class="cite" href="#src-13">S13</a></td><td><span class="sev high">High</span></td><td>0.25 CU fixed, JWT access tokens, JWKS caching, no keep-warm pings.</td></tr>
+      <tr><td>Partial sign-up writes <a class="cite" href="#src-25">S25</a></td><td><span class="sev med">Medium</span></td><td><code>transaction: true</code> + WebSocket <code>Pool</code>.</td></tr>
+      <tr><td>Drift between app deployments</td><td><span class="sev med">Medium</span></td><td>All deploy from one repo and branch. <code>migrate-all</code> runs before each release. <span class="tag infer">INFERRED</span></td></tr>
+      <tr><td>Changing a <code>vercel.app</code> name breaks that app's tokens</td><td><span class="sev med">Medium</span></td><td>Choose final project names before onboarding the first app. <code>vercel.app</code> names "cannot be reserved". <a class="cite" href="#src-29">S29</a></td></tr>
+      <tr><td>Vercel quotas are shared by all apps <a class="cite" href="#src-10">S10</a></td><td><span class="sev low">Low</span></td><td>Watch the usage page. Personal-scale traffic is far below 1,000,000 calls.</td></tr>
+      <tr><td>Logs kept only 1 hour <a class="cite" href="#src-11">S11</a></td><td><span class="sev low">Low</span></td><td>Write audit events (sign-in, client changes) to a Postgres table.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="open-questions">
+  <h2>Open questions</h2>
+  <ol class="findings">
+    <li><strong>When to move to phase 2:</strong> buy the domain once you can afford it, or sooner if Gmail mail starts landing in spam. <span class="tag open">OPEN</span></li>
+    <li><strong>Inbox placement:</strong> send test emails from the Gmail account to Gmail, Outlook and Yahoo inboxes before launch. <span class="tag open">OPEN</span></li>
+    <li><strong>Invite-only or open sign-up</strong> for each app? This sets <code>disableSignUp</code> for magic link and email sign-up. <span class="tag open">OPEN</span></li>
+    <li><strong>How many apps at launch?</strong> More than 25 would mean a second repo or option B. <span class="tag open">OPEN</span></li>
+  </ol>
+</section>
+
+<section id="glossary">
+  <h2>Glossary</h2>
+  <div class="tbl">
+    <table>
+      <tr><th>Term</th><th>Meaning here</th></tr>
+      <tr><td>OIDC</td><td>OpenID Connect: OAuth 2 plus an ID token that says who the user is.</td></tr>
+      <tr><td>PKCE</td><td>A one-time secret the client creates for each login, which proves that the app swapping the code is the one that started the login.</td></tr>
+      <tr><td><code>resource</code></td><td>The URL of the API a token is meant for. Sending it makes the access token a JWT.</td></tr>
+      <tr><td>JWKS</td><td>The published public keys that APIs use to check token signatures.</td></tr>
+      <tr><td>Client credentials</td><td>An OAuth grant in which an app gets a token for itself, with no user involved.</td></tr>
+      <tr><td>Interactive transaction</td><td>A transaction that keeps one connection open while application code runs between its queries.</td></tr>
+      <tr><td>User pool</td><td>The set of accounts one app sees. Here, one Neon project per app.</td></tr>
+      <tr><td>CU / CU-hour</td><td>Neon compute unit. One CU-hour is one CU awake for one hour.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="sources">
+  <h2>Sources</h2>
+  <ol class="sources">
+    <li id="src-1">
+      <div class="src-head"><span class="src-id">S1</span><span class="src-type">Decision</span><span class="src-title">Project brief from the repository owner</span></div>
+      <div class="src-loc">Claude Code conversation, 2026-11-10, <code>/haise-doc</code> request · repo <code>kaneki-auth</code> branch <code>develop/infra</code> @ <code>e059b9e</code></div>
+      <blockquote class="src-quote">I want to create an authentication service that is: #1 deploy to vercel. #2 use neon as DB. #3 use better auth lib. Free cost. … it provide authentication for external applications</blockquote>
+    </li>
+    <li id="src-2">
+      <div class="src-head"><span class="src-id">S2</span><span class="src-type">Web</span><span class="src-title">Better Auth: OAuth 2.1 Provider</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/oauth-provider · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The OAuth Provider plugin turns your Better Auth server into an authorization server that implements …
+PKCE: Required by default, `S256` only (RFC 7636).
+Authorization code, client credentials, and rotating refresh tokens with `offline_access`
+Disable the JWT plugin's `/token` route and its `set-auth-jwt` header.</blockquote>
+      <div class="src-note">Package <code>@better-auth/oauth-provider</code>. The older page <code>/docs/plugins/oidc-provider</code> returned HTTP 404 on the same date.</div>
+    </li>
+    <li id="src-3">
+      <div class="src-head"><span class="src-id">S3</span><span class="src-type">Web</span><span class="src-title">Better Auth: JWT plugin</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/jwt · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The default is EdDSA with the Ed25519 curve.
+The token can be verified in your own service, without the need for an additional verify call or database check.
+The default value is `undefined` (disabled).   [rotationInterval]</blockquote>
+      <div class="src-note">The JWKS path is <code>/jwks</code> under the basePath, which is <code>/api/auth/jwks</code> by default.</div>
+    </li>
+    <li id="src-4">
+      <div class="src-head"><span class="src-id">S4</span><span class="src-type">Web</span><span class="src-title">Better Auth: Next.js integration</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/integrations/next · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Create a route file inside `/api/auth/[...all]` directory.
+export const { GET, POST } = toNextJsHandler(auth);</blockquote>
+    </li>
+    <li id="src-5">
+      <div class="src-head"><span class="src-id">S5</span><span class="src-type">Web</span><span class="src-title">Better Auth: Database concepts</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/concepts/database · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Better Auth requires the following tables to be present in the database.   [user, session, account, verification]
+This is only supported for the built-in Kysely adapter.   [npx auth@latest migrate]</blockquote>
+    </li>
+    <li id="src-6">
+      <div class="src-head"><span class="src-id">S6</span><span class="src-type">Web</span><span class="src-title">Better Auth: Drizzle ORM adapter</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/adapters/drizzle · accessed 2026-11-10</div>
+      <blockquote class="src-quote">To generate and apply the migration, run the following commands:
+npx auth@latest generate · npx drizzle-kit generate · npx drizzle-kit migrate # apply the migration</blockquote>
+    </li>
+    <li id="src-7">
+      <div class="src-head"><span class="src-id">S7</span><span class="src-type">Web</span><span class="src-title">Better Auth: API Key plugin</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/api-key · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The API Key plugin allows you to create and manage API keys for your application.
+It provides a way to authenticate and authorize API requests by verifying API keys.</blockquote>
+    </li>
+    <li id="src-8">
+      <div class="src-head"><span class="src-id">S8</span><span class="src-type">Web</span><span class="src-title">Better Auth: Rate limit</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/concepts/rate-limit · accessed 2026-11-10</div>
+      <blockquote class="src-quote">By default, rate limit data is stored in memory, which may not be suitable for many use cases, particularly in serverless environments.</blockquote>
+    </li>
+    <li id="src-9">
+      <div class="src-head"><span class="src-id">S9</span><span class="src-type">Web</span><span class="src-title">Better Auth: Security reference</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/reference/security · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Trusted origins prevent CSRF attacks and block open redirects.
+Do not leave the localhost origin in a trusted origins list of a production auth instance.</blockquote>
+    </li>
+    <li id="src-10">
+      <div class="src-head"><span class="src-id">S10</span><span class="src-type">Web</span><span class="src-title">Vercel Hobby Plan</span></div>
+      <div class="src-loc">https://vercel.com/docs/plans/hobby · page updated 2026-09-14 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">… the Hobby plan restricts users to non-commercial, personal use only.
+Active CPU: 4 CPU-hrs · Function Invocations: First 1,000,000 · Fast Data Transfer: First 100 GB
+… you will have to wait until 30 days have passed before you can use the feature again.</blockquote>
+    </li>
+    <li id="src-11">
+      <div class="src-head"><span class="src-id">S11</span><span class="src-type">Web</span><span class="src-title">Vercel Limits</span></div>
+      <div class="src-loc">https://vercel.com/docs/limits · page updated 2026-09-16 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Vercel Projects Connected per Git Repository: 25   [Hobby]
+Vercel does not support connecting a project on your Hobby team to Git repositories owned by Git organizations.
+Runtime logs: 1 hour</blockquote>
+      <div class="src-note">The fetched page was cut off at about 40,000 of 62,000 characters. The quotes above come from the part that was read.</div>
+    </li>
+    <li id="src-12">
+      <div class="src-head"><span class="src-id">S12</span><span class="src-type">Web</span><span class="src-title">Vercel: Usage &amp; Pricing for Cron Jobs</span></div>
+      <div class="src-loc">https://vercel.com/docs/cron-jobs/usage-and-pricing · page updated 2026-07-15 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Hobby accounts are limited to cron jobs that run once per day. Cron expressions that would run more frequently will fail during deployment.</blockquote>
+    </li>
+    <li id="src-13">
+      <div class="src-head"><span class="src-id">S13</span><span class="src-type">Web</span><span class="src-title">Neon Pricing / Neon plans</span></div>
+      <div class="src-loc">https://neon.com/pricing and https://neon.com/docs/introduction/plans · both updated 2026-11-04 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Free is capped at 1 GB of Postgres storage per project and 20 GB total across all projects.
+100 CU-hours/project … (enough to run a 0.25 CU compute in a project for 400 hours/month).
+Always enabled on Free (suspends after 5 min, cannot be turned off)
+Compute is suspended only if a project uses up its monthly 100 CU-hours or 5 GB of network transfer;</blockquote>
+      <div class="src-note">Other Free values read on the same pages: 100 projects per organization, 10 branches per project, autoscaling up to 2 CU, a 6-hour restore window.</div>
+    </li>
+    <li id="src-14">
+      <div class="src-head"><span class="src-id">S14</span><span class="src-type">Web</span><span class="src-title">Neon serverless driver</span></div>
+      <div class="src-loc">https://neon.com/docs/serverless/serverless-driver · page updated 2026-10-05 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Switch to WebSockets, with the `Pool` or `Client` constructors, only if you need interactive transactions, sessions, or compatibility with node-postgres
+It allows multiple queries to be executed within a single, non-interactive transaction.   [HTTP transaction()]
+In edge runtimes such as Cloudflare Workers and the Vercel Edge runtime, WebSocket connections can't outlive a single request.</blockquote>
+    </li>
+    <li id="src-15">
+      <div class="src-head"><span class="src-id">S15</span><span class="src-type">Web</span><span class="src-title">Neon: Connection pooling</span></div>
+      <div class="src-loc">https://neon.com/docs/connect/connection-pooling · page updated 2026-10-19 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Neon uses PgBouncer to provide connection pooling, enabling up to 10,000 concurrent connections.
+To enable connection pooling, use a pooled connection string. Add `-pooler` to your endpoint ID:</blockquote>
+      <div class="src-note">The same page gives <code>pool_mode=transaction</code> and 112 <code>max_connections</code> at 0.25 CU, and recommends the direct connection for migrations.</div>
+    </li>
+    <li id="src-16">
+      <div class="src-head"><span class="src-id">S16</span><span class="src-type">Web</span><span class="src-title">Resend Pricing</span></div>
+      <div class="src-loc">https://resend.com/pricing · no date on page · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The Free plan is limited to 100 emails per day.
+Free: 100 emails a day, 3 domains, 3 inboxes, Ticket support, 10,000 automation runs, 30-day data retention.</blockquote>
+    </li>
+    <li id="src-17">
+      <div class="src-head"><span class="src-id">S17</span><span class="src-type">Decision</span><span class="src-title">Owner's answers to the open questions</span></div>
+      <div class="src-loc">Claude Code conversation, 2026-11-10, repository owner, reply to the first draft's "Open questions"</div>
+      <blockquote class="src-quote">#1 personal only. #2 email + pwd, google, magic link. #3 use vercel free domain. #4 analyze the two method … #5 … each app has an independent user group, user A sign in on app 1 and 2 is two different account … #6 research …</blockquote>
+    </li>
+    <li id="src-18">
+      <div class="src-head"><span class="src-id">S18</span><span class="src-type">Web</span><span class="src-title">Better Auth: OAuth Provider · Tokens and Clients</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/oauth-provider/tokens and …/oauth-provider/clients · accessed 2026-11-10</div>
+      <blockquote class="src-quote">`POST /oauth2/token` supports the `authorization_code`, `client_credentials`, and `refresh_token` grants.
+To get a JWT access token, include a `resource` in the request and enable the JWT plugin.
+If either is missing, the access token is opaque.
+A `client_credentials` JWT has no session. Its lifetime is the only limit.
+A client cannot use the `client_credentials` grant until you allow it, and its `scope` does not apply to that grant.</blockquote>
+      <div class="src-note">Lifetimes table: <code>accessTokenExpiresIn</code> 3600, <code>m2mAccessTokenExpiresIn</code> 3600, <code>refreshTokenExpiresIn</code> 2592000. The clients page bars <code>openid</code>, <code>profile</code>, <code>email</code> and <code>offline_access</code> from client-credentials scopes.</div>
+    </li>
+    <li id="src-19">
+      <div class="src-head"><span class="src-id">S19</span><span class="src-type">Web</span><span class="src-title">Better Auth: OAuth Provider · Resource server</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/oauth-provider/resource-server · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The caller must authenticate as a registered client.   [/oauth2/introspect, RFC 7662]</blockquote>
+    </li>
+    <li id="src-20">
+      <div class="src-head"><span class="src-id">S20</span><span class="src-type">Web</span><span class="src-title">Better Auth: API Key reference and advanced</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/api-key/reference and …/api-key/advanced · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The header name to check for API key. Default is `x-api-key`.
+The built-in rate-limiting applies whenever an API key is validated
+Whenever an API key is used, the `remaining` count is updated.</blockquote>
+      <div class="src-note">Verification endpoint is <code>POST /api-key/verify</code> (<code>auth.api.verifyApiKey</code>). Keys are stored hashed in the database adapter by default.</div>
+    </li>
+    <li id="src-21">
+      <div class="src-head"><span class="src-id">S21</span><span class="src-type">Web</span><span class="src-title">Better Auth: Organization plugin</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/organization · accessed 2026-11-10</div>
+      <blockquote class="src-quote">To list the organizations that a user is a member of, you can use `useListOrganizations` hook.
+To add a member to an organization, we first need to send an invitation to the user.</blockquote>
+      <div class="src-note">The page never says "users are global" in so many words. That conclusion comes from the membership model plus the unique email in S23.</div>
+    </li>
+    <li id="src-22">
+      <div class="src-head"><span class="src-id">S22</span><span class="src-type">Web</span><span class="src-title">Better Auth: Users &amp; accounts</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/concepts/users-accounts · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Account linking is enabled by default
+Better Auth automatically links the OAuth account to that user.</blockquote>
+    </li>
+    <li id="src-23">
+      <div class="src-head"><span class="src-id">S23</span><span class="src-type">Code</span><span class="src-title">Better Auth core schema: user.email</span></div>
+      <div class="src-loc">npm <code>@better-auth/core@1.7.19</code> · <code>package/dist/db/get-tables.mjs:160-163</code> · fetched with <code>npm pack</code> 2026-11-10</div>
+      <blockquote class="src-quote">email: {
+	type: "string",
+	unique: true,
+	required: true,</blockquote>
+    </li>
+    <li id="src-24">
+      <div class="src-head"><span class="src-id">S24</span><span class="src-type">Code</span><span class="src-title">Better Auth: flows wrapped in runWithTransaction</span></div>
+      <div class="src-loc">npm <code>better-auth@1.7.19</code> · <code>package/dist/api/routes/sign-up.mjs:144</code>, <code>oauth2/link-account.mjs:308</code>, <code>utils/password.mjs:32</code>, <code>api/routes/update-user.mjs:173</code></div>
+      <blockquote class="src-quote">return runWithTransaction(ctx.context.adapter, async () => {          // sign-up.mjs:144
+const { createdUser, createdAccount } = await runWithTransaction(c.context.adapter, async () => {   // link-account.mjs:308
+await runWithTransaction(ctx.context.adapter, async () => {           // password.mjs:32
+	await consumeResetToken?.();</blockquote>
+      <div class="src-note">Inside the sign-up callback: <code>createUser</code>, then <code>linkAccount</code>, then <code>createSession</code> (lines 217–255).</div>
+    </li>
+    <li id="src-25">
+      <div class="src-head"><span class="src-id">S25</span><span class="src-type">Code</span><span class="src-title">@better-auth/core: transaction fallback</span></div>
+      <div class="src-loc">npm <code>@better-auth/core@1.7.19</code> · <code>package/dist/context/transaction.mjs:60-65</code> and <code>package/dist/db/adapter/factory.mjs:18,426</code></div>
+      <blockquote class="src-quote">* When the adapter has no real transaction (`transaction: false`), writes are
+* applied as they happen and cannot roll back, …
+const createAsIsTransaction = (adapter) =&gt; (fn) =&gt; fn(adapter);
+if (!config.transaction) lazyLoadTransaction = createAsIsTransaction(adapter);</blockquote>
+    </li>
+    <li id="src-26">
+      <div class="src-head"><span class="src-id">S26</span><span class="src-type">Code</span><span class="src-title">@better-auth/drizzle-adapter: transaction option</span></div>
+      <div class="src-loc">npm <code>@better-auth/drizzle-adapter@1.7.19</code> · <code>package/dist/index.d.mts:35-42</code>, <code>package/dist/index.mjs:493-534,565</code></div>
+      <blockquote class="src-quote">* Whether to execute multiple operations in a transaction.
+* If the database doesn't support transactions,
+* set this to `false` and operations will be executed sequentially.
+* @default false
+transaction: config.transaction ?? false ? (cb) =&gt; db.transaction((tx) =&gt; {</blockquote>
+      <div class="src-note">The adapter opens its own <code>db.transaction</code> only on the <code>provider === "mysql"</code> branches. The Postgres path uses single <code>DELETE/UPDATE … RETURNING</code> statements.</div>
+    </li>
+    <li id="src-27">
+      <div class="src-head"><span class="src-id">S27</span><span class="src-type">Web</span><span class="src-title">Drizzle ORM: Connect to Neon</span></div>
+      <div class="src-loc">https://orm.drizzle.team/docs/connect-neon · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Querying over HTTP is faster for single, non-interactive transactions.
+If you need session or interactive transaction support … you can use the WebSocket-based `neon-serverless` driver.</blockquote>
+    </li>
+    <li id="src-28">
+      <div class="src-head"><span class="src-id">S28</span><span class="src-type">Web</span><span class="src-title">Resend: 403 error using resend.dev / Domains</span></div>
+      <div class="src-loc">https://resend.com/docs/knowledge-base/403-error-resend-dev-domain and https://resend.com/docs/dashboard/domains/introduction · accessed 2026-11-10</div>
+      <blockquote class="src-quote">can only send emails to the email address associated with your Resend account
+You must add and verify at least one domain to send emails with Resend.</blockquote>
+    </li>
+    <li id="src-29">
+      <div class="src-head"><span class="src-id">S29</span><span class="src-type">Web</span><span class="src-title">Vercel: Domains / Working with DNS</span></div>
+      <div class="src-loc">https://vercel.com/docs/domains and https://vercel.com/docs/domains/working-with-dns · accessed 2026-11-10</div>
+      <blockquote class="src-quote">allocated on a first-come, first-served basis and cannot be reserved   [.vercel.app URLs]</blockquote>
+      <div class="src-note">These pages describe DNS record management only for domains you buy or transfer. No mention was found of adding TXT/MX records to <code>*.vercel.app</code>.</div>
+    </li>
+    <li id="src-30">
+      <div class="src-head"><span class="src-id">S30</span><span class="src-type">Web</span><span class="src-title">Better Auth: Magic link plugin</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/plugins/magic-link · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Magic link or email link is a way to authenticate users without a password.
+If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.</blockquote>
+      <div class="src-note"><code>expiresIn</code> defaults to 300 s. The default rate limit is <code>{ window: 60, max: 5 }</code>.</div>
+    </li>
+    <li id="src-31">
+      <div class="src-head"><span class="src-id">S31</span><span class="src-type">Web</span><span class="src-title">Better Auth: Google provider</span></div>
+      <div class="src-loc">https://www.better-auth.com/docs/authentication/google · accessed 2026-11-10</div>
+      <blockquote class="src-quote">You must configure the `baseURL` to avoid `redirect_uri_mismatch` errors.</blockquote>
+      <div class="src-note">Redirect URI format: <code>https://&lt;host&gt;/api/auth/callback/google</code>. Requires <code>clientId</code> and <code>clientSecret</code>.</div>
+    </li>
+    <li id="src-32">
+      <div class="src-head"><span class="src-id">S32</span><span class="src-type">Decision</span><span class="src-title">Mail sender: SMTP first, domain later</span></div>
+      <div class="src-loc">Claude Code conversation, 2026-11-10, repository owner, after the domain price check</div>
+      <blockquote class="src-quote">I need to save for that, so can the service proceed with that later? can use SMTP for sending email first.</blockquote>
+      <div class="src-note">Price checked the same day: <code>.com</code> US$10.46 a year for both registration and renewal at Cloudflare Registrar, according to the third-party mirror cfdomainpricing.com (updated 2026-11-10). Confirm on Cloudflare before buying.</div>
+    </li>
+    <li id="src-33">
+      <div class="src-head"><span class="src-id">S33</span><span class="src-type">Web</span><span class="src-title">Gmail Help: Gmail sending limits</span></div>
+      <div class="src-loc">https://support.google.com/mail/answer/22839 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">more than 500 recipients in a single email and or more than 500 emails sent in a day.
+you should be able to send emails again within 1 to 24 hours.</blockquote>
+    </li>
+    <li id="src-34">
+      <div class="src-head"><span class="src-id">S34</span><span class="src-type">Web</span><span class="src-title">Google Account Help: Sign in with app passwords</span></div>
+      <div class="src-loc">https://support.google.com/accounts/answer/185833 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">App passwords can only be used with accounts that have 2-Step Verification turned on.
+App passwords aren't recommended and are unnecessary in most cases.</blockquote>
+      <div class="src-note">The same page says app passwords are revoked when the account password changes, and may be unavailable for work/school or Advanced Protection accounts.</div>
+    </li>
+    <li id="src-35">
+      <div class="src-head"><span class="src-id">S35</span><span class="src-type">Web</span><span class="src-title">Vercel KB: Sending emails from an application on Vercel</span></div>
+      <div class="src-loc">https://vercel.com/kb/guide/sending-emails-from-an-application-on-vercel · updated 2026-09-24 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Vercel blocks port 25 for outgoing connections, while ports 465 and 587 stay open.
+Yes, with caveats. Nodemailer runs in the Node.js runtime on ports 465 or 587
+An open port doesn't remove the connection lifecycle above, so SMTP remains the harder path.</blockquote>
+    </li>
+    <li id="src-36">
+      <div class="src-head"><span class="src-id">S36</span><span class="src-type">Web</span><span class="src-title">Google Workspace Admin: Send email from a printer, scanner, or app</span></div>
+      <div class="src-loc">https://support.google.com/a/answer/176600 (redirects to knowledge.workspace.google.com/admin/gmail/send-email-from-a-printer-scanner-or-app) · accessed 2026-11-10</div>
+      <blockquote class="src-quote">The fully qualified domain name of the SMTP service is smtp.gmail.com.</blockquote>
+      <div class="src-note">Ports 465 (SSL) and 587 (TLS) come from a summary of the page's second half, not from verbatim text. The page is written for Workspace admins, so applying it to a personal Gmail account is <span class="tag infer">INFERRED</span>.</div>
+    </li>
+    <li id="src-37">
+      <div class="src-head"><span class="src-id">S37</span><span class="src-type">Web</span><span class="src-title">Gmail Help: Email sender guidelines</span></div>
+      <div class="src-loc">https://support.google.com/mail/answer/81126 · accessed 2026-11-10</div>
+      <blockquote class="src-quote">Set up SPF or DKIM email authentication for your sending domains.
+Use a TLS connection for transmitting email.</blockquote>
+    </li>
+  </ol>
+</section>
+
+<footer class="doc-foot">Legend: <span class="tag sure">VERIFIED</span> seen directly in the cited source · <span class="tag infer">INFERRED</span> reasoned from evidence, not confirmed end-to-end · <span class="tag open">OPEN</span> unresolved, needs an answer. Press <code>/</code> to search; the ⟳ button reloads the latest version of this file.</footer>
+<!-- ===================== DOCUMENT CONTENT END ===================== -->
+</main>
+</div>
+
+<script id="haise-shell-js">
+/* ===== haise-doc shell v3.1.0 — do not edit per document ===== */
+(function(){
+  var root=document.documentElement, body=document.body;
+  var LANG=(root.lang||'en').slice(0,2).toLowerCase();
+  var I18N={
+    en:{toc:'Contents',search:'Search this document…  ( / )',none:'No matches',nav:'Show / hide contents',
+        prev:'Previous match (Shift+Enter)',next:'Next match (Enter)',citedIn:'Cited in',
+        reload:'Reload latest version (keeps your place)',
+        zoom:{hint:'Click to enlarge',zin:'Zoom in (+)',zout:'Zoom out (−)',fit:'Fit to screen (0)',one:'Actual size (1)',close:'Close (Esc)'},
+        theme:{auto:'Theme: auto',light:'Theme: light',dark:'Theme: dark'}},
+    vi:{toc:'Mục lục',search:'Tìm trong tài liệu…  ( / )',none:'Không có kết quả',nav:'Ẩn / hiện mục lục',
+        prev:'Kết quả trước (Shift+Enter)',next:'Kết quả sau (Enter)',citedIn:'Được dẫn ở',
+        reload:'Tải lại bản mới nhất (giữ vị trí đang đọc)',
+        zoom:{hint:'Nhấn để phóng to',zin:'Phóng to (+)',zout:'Thu nhỏ (−)',fit:'Vừa màn hình (0)',one:'Kích thước thật (1)',close:'Đóng (Esc)'},
+        theme:{auto:'Giao diện: tự động',light:'Giao diện: sáng',dark:'Giao diện: tối'}}
+  };
+  var T=I18N[LANG]||I18N.en;
+  var store={get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},
+             set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
+  var $=function(id){return document.getElementById(id);};
+  var main=$('content');
+
+  /* ---------- theme ---------- */
+  var themeBtn=$('haise-theme'), ICON={auto:'◐',light:'☀',dark:'☾'};
+  function applyTheme(t){
+    if(t==='light'||t==='dark') root.setAttribute('data-theme',t); else root.removeAttribute('data-theme');
+    themeBtn.textContent=ICON[t]; themeBtn.title=T.theme[t]; themeBtn.setAttribute('aria-label',T.theme[t]);
+  }
+  var theme=store.get('haise.theme'); if(theme!=='light'&&theme!=='dark') theme='auto';
+  applyTheme(theme);
+  themeBtn.addEventListener('click',function(){
+    theme=theme==='auto'?'light':theme==='light'?'dark':'auto';
+    store.set('haise.theme',theme); applyTheme(theme);
+  });
+
+  /* ---------- numbering + table of contents ---------- */
+  $('haise-toc-label').textContent=T.toc;
+  var toc=$('haise-toc'), ol=document.createElement('ol'), tocLinks=[], sections=[];
+  [].forEach.call(main.querySelectorAll('section'),function(sec,i){
+    var h2=sec.querySelector(':scope > h2'); if(!h2) return;
+    if(!sec.id) sec.id='s'+(i+1);
+    var n=String(sections.length+1);
+    sections.push(sec);
+    var num=document.createElement('span'); num.className='num'; num.textContent=n+'.'; h2.insertBefore(num,h2.firstChild);
+    var li=document.createElement('li'), a=mkLink('#'+sec.id,n+'.',h2);
+    a.dataset.sec=sec.id; li.appendChild(a); tocLinks.push({el:sec,a:a});
+    var subs=sec.querySelectorAll('h3');
+    if(subs.length){
+      var sub=document.createElement('ol');
+      [].forEach.call(subs,function(h3,j){
+        if(!h3.id) h3.id=sec.id+'-'+(j+1);
+        var m=n+'.'+(j+1);
+        var s=document.createElement('span'); s.className='num'; s.textContent=m; h3.insertBefore(s,h3.firstChild);
+        var sli=document.createElement('li'), sa=mkLink('#'+h3.id,m,h3);
+        sli.appendChild(sa); sub.appendChild(sli); tocLinks.push({el:h3,a:sa});
+      });
+      li.appendChild(sub);
+    }
+    ol.appendChild(li);
+  });
+  toc.appendChild(ol);
+  function mkLink(href,n,h){
+    var a=document.createElement('a'); a.href=href;
+    var s=document.createElement('span'); s.className='num'; s.textContent=n;
+    var t=document.createElement('span'); t.className='t';
+    var clone=h.cloneNode(true); var c=clone.querySelector('.num'); if(c) c.remove();
+    [].forEach.call(clone.querySelectorAll('a.cite,.tag'),function(x){x.remove();});
+    t.textContent=clone.textContent.trim();
+    var b=document.createElement('span'); b.className='badge';
+    a.appendChild(s); a.appendChild(t); a.appendChild(b);
+    a.addEventListener('click',function(){ if(isMobile()) body.classList.remove('nav-open'); });
+    return a;
+  }
+
+  /* ---------- sidebar toggle ---------- */
+  var navBtn=$('haise-nav-btn'); navBtn.title=T.nav; navBtn.setAttribute('aria-label',T.nav);
+  var mq=window.matchMedia('(max-width:960px)');
+  function isMobile(){return mq.matches;}
+  if(store.get('haise.nav')==='collapsed') body.classList.add('nav-collapsed');
+  navBtn.addEventListener('click',function(){
+    if(isMobile()){ body.classList.toggle('nav-open'); }
+    else{ body.classList.toggle('nav-collapsed'); store.set('haise.nav',body.classList.contains('nav-collapsed')?'collapsed':'open'); }
+  });
+  $('haise-backdrop').addEventListener('click',function(){body.classList.remove('nav-open');});
+
+  /* ---------- scroll spy + progress ---------- */
+  var ticking=false, prog=$('haise-progress');
+  function onScroll(){
+    ticking=false;
+    var y=window.scrollY, H=document.documentElement.scrollHeight-window.innerHeight;
+    prog.style.width=(H>0?Math.min(100,y/H*100):0)+'%';
+    var off=parseInt(getComputedStyle(root).getPropertyValue('--topbar-h'))+30, cur=null;
+    for(var i=0;i<tocLinks.length;i++){ if(tocLinks[i].el.getBoundingClientRect().top-off<=0) cur=tocLinks[i]; }
+    if(!cur&&tocLinks.length) cur=tocLinks[0];
+    tocLinks.forEach(function(t){t.a.classList.toggle('active',t===cur);});
+    if(cur&&!isMobile()){
+      var r=cur.a.getBoundingClientRect(), sb=$('haise-sidebar').getBoundingClientRect();
+      if(r.top<sb.top+20||r.bottom>sb.bottom-20) cur.a.scrollIntoView({block:'nearest'});
+    }
+  }
+  window.addEventListener('scroll',function(){ if(!ticking){ticking=true;requestAnimationFrame(onScroll);} },{passive:true});
+  onScroll();
+
+  /* ---------- citations: tooltips + back-references ---------- */
+  var back={};
+  [].forEach.call(main.querySelectorAll('a.cite'),function(a,i){
+    var id=(a.getAttribute('href')||'').replace(/^#/,''), src=document.getElementById(id);
+    if(!a.id) a.id='cite-'+(i+1);
+    if(!src){a.classList.add('broken');return;}
+    var t=src.querySelector('.src-title'); if(t) a.title=t.textContent.trim();
+    (back[id]=back[id]||[]).push(a);
+  });
+  Object.keys(back).forEach(function(id){
+    var src=document.getElementById(id), box=src.querySelector('.backrefs');
+    if(!box){box=document.createElement('div');box.className='backrefs';src.appendChild(box);}
+    box.textContent=T.citedIn+': ';
+    back[id].forEach(function(a){
+      var sec=a.closest('section'), n=sec?sec.querySelector(':scope > h2 .num'):null;
+      var l=document.createElement('a'); l.href='#'+a.id; l.textContent='↩ §'+(n?n.textContent.replace('.',''):'?');
+      var h=sec?sec.querySelector(':scope > h2'):null; if(h) l.title=h.textContent.trim();
+      box.appendChild(l);
+    });
+  });
+
+  /* ---------- search (case- and accent-insensitive) ---------- */
+  var q=$('haise-q'), countEl=$('haise-count'), hits=[], cur=-1, opened=[], timer=null;
+  q.placeholder=T.search; q.setAttribute('aria-label',T.search);
+  $('haise-prev').title=T.prev; $('haise-prev').setAttribute('aria-label',T.prev);
+  $('haise-next').title=T.next; $('haise-next').setAttribute('aria-label',T.next);
+  function foldChar(c){
+    if(c==='đ'||c==='Đ') return 'd';
+    return c.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  }
+  function fold(s){
+    var out='', map=[];
+    for(var i=0;i<s.length;i++){ var f=foldChar(s[i]); for(var j=0;j<f.length;j++){out+=f[j];map.push(i);} }
+    return {s:out,map:map};
+  }
+  function clear(){
+    var parents=[];
+    hits.forEach(function(m){ var p=m.parentNode; if(!p) return; p.replaceChild(document.createTextNode(m.textContent),m); if(parents.indexOf(p)<0) parents.push(p); });
+    parents.forEach(function(p){p.normalize();});
+    opened.forEach(function(d){d.open=false;}); opened=[];
+    hits=[]; cur=-1;
+    tocLinks.forEach(function(t){t.a.querySelector('.badge').textContent='';});
+  }
+  function run(noJump){
+    clear();
+    var raw=q.value.trim(); if(raw.length<2){countEl.textContent='';return;}
+    var needle=fold(raw).s, nodes=[];
+    var w=document.createTreeWalker(main,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      if(!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      var p=n.parentNode;
+      if(p.closest('script,style,svg,.no-search,textarea')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;}});
+    while(w.nextNode()) nodes.push(w.currentNode);
+    for(var k=0;k<nodes.length&&hits.length<3000;k++){
+      var node=nodes[k], text=node.nodeValue, f=fold(text), idx=f.s.indexOf(needle);
+      if(idx<0) continue;
+      var frag=document.createDocumentFragment(), last=0;
+      while(idx>=0){
+        var a=f.map[idx], b=f.map[idx+needle.length-1]+1;
+        if(a>=last){
+          frag.appendChild(document.createTextNode(text.slice(last,a)));
+          var m=document.createElement('mark'); m.className='hit'; m.textContent=text.slice(a,b);
+          frag.appendChild(m); hits.push(m); last=b;
+        }
+        idx=f.s.indexOf(needle,idx+needle.length);
+      }
+      frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag,node);
+    }
+    hits.forEach(function(m){
+      var d=m.parentNode.closest('details');
+      while(d){ if(!d.open){d.open=true;opened.push(d);} d=d.parentNode.closest('details'); }
+    });
+    tocLinks.forEach(function(t){
+      var scope=t.el.tagName==='SECTION'?t.el:null; if(!scope) return;
+      var n=scope.querySelectorAll('mark.hit').length;
+      t.a.querySelector('.badge').textContent=n?String(n):'';
+    });
+    if(!hits.length) countEl.textContent=T.none;
+    else if(noJump===true) countEl.textContent='– / '+hits.length;
+    else go(0);
+  }
+  function go(i){
+    if(!hits.length) return;
+    if(cur>=0&&hits[cur]) hits[cur].classList.remove('cur');
+    cur=(i+hits.length)%hits.length;
+    hits[cur].classList.add('cur');
+    hits[cur].scrollIntoView({block:'center',behavior:'smooth'});
+    countEl.textContent=(cur+1)+' / '+hits.length;
+  }
+  q.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(run,180);});
+  q.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault(); if(timer){clearTimeout(timer);timer=null;} if(!hits.length) run(); else go(cur+(e.shiftKey?-1:1));}
+    else if(e.key==='Escape'){q.value='';clear();countEl.textContent='';q.blur();}
+  });
+  $('haise-prev').addEventListener('click',function(){go(cur-1);});
+  $('haise-next').addEventListener('click',function(){go(cur+1);});
+
+  /* ---------- reload: re-read the file from disk, keep the reader's place ---------- */
+  var RK='haise.reload:'+location.pathname, reloadBtn=$('haise-reload');
+  reloadBtn.title=T.reload; reloadBtn.setAttribute('aria-label',T.reload);
+  function ss(k,v){try{if(v===undefined){var r=sessionStorage.getItem(k);sessionStorage.removeItem(k);return r;}sessionStorage.setItem(k,v);}catch(e){return null;}}
+  function reload(){
+    var anchor=null, top=0;
+    for(var i=tocLinks.length-1;i>=0;i--){ var r=tocLinks[i].el.getBoundingClientRect(); if(r.top<=window.innerHeight/3){anchor=tocLinks[i].el.id;top=r.top;break;} }
+    var open=[].map.call(main.querySelectorAll('details'),function(d){return d.open&&opened.indexOf(d)<0;});
+    ss(RK,JSON.stringify({y:window.scrollY,anchor:anchor,top:top,q:q.value,open:open}));
+    location.reload();
+  }
+  reloadBtn.addEventListener('click',reload);
+  (function restore(){
+    var s=ss(RK); if(!s) return;
+    try{s=JSON.parse(s);}catch(e){return;}
+    if('scrollRestoration' in history) history.scrollRestoration='manual';
+    var ds=main.querySelectorAll('details');
+    (s.open||[]).forEach(function(o,i){ if(o&&ds[i]) ds[i].open=true; });
+    if(s.q){q.value=s.q; run(true);}
+    var el=s.anchor&&document.getElementById(s.anchor);
+    var y=el?el.getBoundingClientRect().top+window.scrollY-s.top:s.y;
+    root.style.scrollBehavior='auto'; window.scrollTo(0,y); root.style.scrollBehavior='';
+    onScroll();
+  })();
+  /* ---------- zoom: click a figure image or diagram to view it large (vector stays sharp) ---------- */
+  (function zoom(){
+    var items=[].slice.call(main.querySelectorAll('figure.fig img, figure.fig svg')).filter(function(el){
+      return !el.closest('[data-nozoom]') && !(el.tagName.toLowerCase()==='svg' && el.parentElement.closest('svg'));
+    });
+    if(!items.length) return;
+    var Z=T.zoom, ov=document.createElement('div');
+    ov.className='zoom-ov'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true');
+    ov.innerHTML='<div class="zoom-bar"><span class="zoom-pct"></span>'+
+      '<button class="iconbtn" type="button" data-z="out">−</button><button class="iconbtn" type="button" data-z="fit">⤢</button>'+
+      '<button class="iconbtn" type="button" data-z="one">1:1</button><button class="iconbtn" type="button" data-z="in">+</button>'+
+      '<button class="iconbtn" type="button" data-z="close">✕</button></div><div class="zoom-cap"></div>';
+    body.appendChild(ov);
+    var bar=ov.querySelector('.zoom-bar'), cap=ov.querySelector('.zoom-cap'), pct=ov.querySelector('.zoom-pct');
+    var TT={out:Z.zout,fit:Z.fit,one:Z.one,'in':Z.zin,close:Z.close};
+    [].forEach.call(bar.querySelectorAll('button'),function(b){b.title=TT[b.dataset.z];b.setAttribute('aria-label',TT[b.dataset.z]);});
+    var node=null,isSvg=false,w=1,h=1,s=1,fit=1,x=0,y=0,idx=-1,lastFocus=null,pts={},moved=false;
+    function dims(el){
+      if(el.tagName.toLowerCase()==='svg'){var vb=el.viewBox&&el.viewBox.baseVal; if(vb&&vb.width) return [vb.width,vb.height];}
+      else if(el.naturalWidth) return [el.naturalWidth,el.naturalHeight];
+      var r=el.getBoundingClientRect(); return [r.width||1,r.height||1];
+    }
+    function vw(){return ov.clientWidth;} function vh(){return ov.clientHeight;}
+    function lim(){var b=Math.max(fit,1); return [fit*0.5, b*(isSvg?10:4)];}
+    function render(){
+      node.style.width=(w*s)+'px'; node.style.height=(h*s)+'px';
+      node.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)';
+      pct.textContent=Math.round(s*100)+'%';
+    }
+    function setScale(ns,cx,cy){
+      var l=lim(); ns=Math.min(l[1],Math.max(l[0],ns));
+      if(cx===undefined){cx=vw()/2;cy=vh()/2;}
+      x=cx-(cx-x)*ns/s; y=cy-(cy-y)*ns/s; s=ns; render();
+    }
+    function toFit(){
+      var top=60, bottom=(cap.textContent?cap.offsetHeight+24:16), room=vh()-top-bottom;
+      fit=Math.min((vw()-32)/w,room/h);
+      s=fit; x=(vw()-w*s)/2; y=top+(room-h*s)/2; render();
+    }
+    function open(i){
+      idx=(i+items.length)%items.length;
+      var src=items[idx]; isSvg=src.tagName.toLowerCase()==='svg';
+      if(node) node.remove();
+      node=src.cloneNode(true); node.removeAttribute('id'); node.removeAttribute('tabindex');
+      node.classList.remove('zoomable'); node.removeAttribute('style'); node.classList.add('zoom-item');
+      if(isSvg){node.removeAttribute('width');node.removeAttribute('height');node.setAttribute('preserveAspectRatio','xMidYMid meet');}
+      var d=dims(src); w=d[0]; h=d[1];
+      ov.insertBefore(node,bar);
+      var fig=src.closest('figure'), fc=fig&&fig.querySelector(':scope > figcaption');
+      var label=src.getAttribute('alt')||src.getAttribute('aria-label')||'';
+      cap.innerHTML='';
+      if(items.length>1){var n=document.createElement('b');n.textContent=(idx+1)+' / '+items.length+'  ';cap.appendChild(n);}
+      cap.appendChild(document.createTextNode([label,fc?fc.textContent.trim():''].filter(Boolean).join(' — ')));
+      if(!ov.classList.contains('on')){lastFocus=document.activeElement; ov.classList.add('on'); body.style.overflow='hidden';}
+      toFit(); bar.querySelector('[data-z="close"]').focus();
+    }
+    function close(){
+      ov.classList.remove('on'); body.style.overflow=''; pts={};
+      if(node){node.remove();node=null;} if(lastFocus&&lastFocus.focus) lastFocus.focus();
+    }
+    function act(z){
+      if(z==='close') close(); else if(z==='fit') toFit(); else if(z==='one') setScale(1);
+      else if(z==='in') setScale(s*1.4); else if(z==='out') setScale(s/1.4);
+    }
+    items.forEach(function(el,i){
+      el.classList.add('zoomable'); el.setAttribute('tabindex','0');
+      if(el.tagName.toLowerCase()==='img') el.title=Z.hint;
+      el.addEventListener('click',function(e){ if(e.target.closest&&e.target.closest('a')) return; open(i); });
+      el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();open(i);} });
+    });
+    bar.addEventListener('click',function(e){var b=e.target.closest('button'); if(b) act(b.dataset.z);});
+    ov.addEventListener('wheel',function(e){
+      e.preventDefault(); setScale(s*Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0015)),e.clientX,e.clientY);
+    },{passive:false});
+    ov.addEventListener('pointerdown',function(e){
+      if(e.target.closest('.zoom-bar')) return;
+      try{ov.setPointerCapture(e.pointerId);}catch(_){}
+      pts[e.pointerId]={x:e.clientX,y:e.clientY,t:e.target}; if(Object.keys(pts).length===1) moved=false;
+      ov.classList.add('drag');
+    });
+    ov.addEventListener('pointermove',function(e){
+      var p=pts[e.pointerId]; if(!p) return;
+      var ids=Object.keys(pts);
+      if(ids.length===1){
+        var dx=e.clientX-p.x, dy=e.clientY-p.y; if(Math.abs(dx)+Math.abs(dy)>2) moved=true;
+        x+=dx; y+=dy; p.x=e.clientX; p.y=e.clientY; render();
+      }else if(ids.length===2){
+        var o=pts[ids[0]===String(e.pointerId)?ids[1]:ids[0]];
+        var d0=Math.hypot(p.x-o.x,p.y-o.y); p.x=e.clientX; p.y=e.clientY;
+        var d1=Math.hypot(p.x-o.x,p.y-o.y); moved=true;
+        if(d0>0) setScale(s*d1/d0,(p.x+o.x)/2,(p.y+o.y)/2);
+      }
+    });
+    function up(e){
+      var p=pts[e.pointerId]; delete pts[e.pointerId];
+      if(!Object.keys(pts).length){ ov.classList.remove('drag'); if(e.type==='pointerup'&&!moved&&p&&p.t===ov) close(); }
+    }
+    ov.addEventListener('pointerup',up); ov.addEventListener('pointercancel',up);
+    ov.addEventListener('dblclick',function(e){
+      if(!node||!node.contains(e.target)) return;
+      if(s>fit*1.05) toFit(); else setScale(isSvg?fit*2.5:Math.max(1,fit*2),e.clientX,e.clientY);
+    });
+    document.addEventListener('keydown',function(e){
+      if(!ov.classList.contains('on')) return;
+      var k=e.key, map={'Escape':'close','+':'in','=':'in','-':'out','_':'out','0':'fit','1':'one'};
+      if(map[k]) act(map[k]);
+      else if(k==='ArrowRight') open(idx+1);
+      else if(k==='ArrowLeft') open(idx-1);
+      else if(k==='Tab'){ /* keep focus inside the viewer */
+        var bs=bar.querySelectorAll('button'), f=bs[0], l=bs[bs.length-1];
+        if(e.shiftKey&&document.activeElement===f){l.focus();} else if(!e.shiftKey&&document.activeElement===l){f.focus();} else return;
+      } else return;
+      e.preventDefault(); e.stopImmediatePropagation();
+    },true);
+    window.addEventListener('resize',function(){ if(ov.classList.contains('on')) toFit(); });
+  })();
+
+  /* ---------- phase focus: hover anything with data-phase to light up the same phase everywhere; tap/click pins it ---------- */
+  (function phases(){
+    var els=[].slice.call(main.querySelectorAll('[data-phase]'));
+    if(!els.length) return;
+    var pinned=null;
+    function focus(p){
+      body.classList.toggle('focus-on',!!p);
+      els.forEach(function(el){el.classList.toggle('on',!!p&&el.getAttribute('data-phase')===p);});
+    }
+    els.forEach(function(el){
+      var p=el.getAttribute('data-phase');
+      el.addEventListener('mouseenter',function(){focus(p);});
+      el.addEventListener('mouseleave',function(){focus(pinned);});
+      if(!el.closest('svg')){ /* clicks inside diagrams stay with the zoom viewer */
+        el.addEventListener('click',function(e){
+          if(e.target.closest('a,button,summary,input,code')) return;
+          e.stopPropagation(); pinned=pinned===p?null:p; focus(pinned);
+        });
+      }
+    });
+    document.addEventListener('keydown',function(e){
+      if(e.key==='Escape'&&pinned&&!document.querySelector('.zoom-ov.on')){pinned=null;focus(null);}
+    });
+  })();
+
+  document.addEventListener('keydown',function(e){
+    var tag=(e.target.tagName||'').toLowerCase(), typing=tag==='input'||tag==='textarea'||e.target.isContentEditable;
+    if((e.key==='/'&&!typing)||((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K'))){e.preventDefault();q.focus();q.select();}
+  });
+})();
+</script>
+</body>
+</html>
