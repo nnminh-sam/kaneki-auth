@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "my-git-local": {
+      "source": {
+        "source": "directory",
+        "path": "/Users/nnminh/workspaces/agentic-workflows/my-git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "my-git@my-git-local": true
+  }
+}
