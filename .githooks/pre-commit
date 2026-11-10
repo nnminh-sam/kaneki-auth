@@ -12,6 +12,8 @@ case "$branch" in
     echo "  Create a work branch: git switch -c develop/feat/<name> develop/base" >&2
     echo "  and merge through a pull request." >&2
     exit 1 ;;
+  "develop/infra")
+    exit 0 ;;   # project override: long-lived branch for infrastructure changes
 esac
 
 if ! printf '%s\n' "$branch" | grep -Eq '^develop/(feat|fix|chore|docs|refactor|perf|test|build|ci)/[a-z0-9][a-z0-9._-]*$'; then
